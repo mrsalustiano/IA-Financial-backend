@@ -1,13 +1,14 @@
 # IA-Financial
 
-Sistema de controle financeiro pessoal com IA, construído com **Java 21**, **Spring Boot 3.5.6** e
+Sistema de controle financeiro pessoal com IA, construído com **Java 21**, **Spring Boot 3.5.16** e
 **Arquitetura Hexagonal (Ports and Adapters)**.
 
 Escopo atual: **FASES 1–5 concluídas** (CRUD, alteração/exclusão com auditoria, listagem, categorias,
 análise com IA) e **FASE 6 — Saldo Diário**, **FASE 7 — Fechamento Mensal (scheduler)**,
-**FASE 8 — Planejamento Financeiro com IA** e **FASE 9 — Assistente Financeiro com IA**, além da
-fundação transversal (tratamento de erros, envelope de resposta, trilha de auditoria, soft delete,
-validadores de schema do MongoDB, OpenAPI e adaptador Ollama).
+**FASE 8 — Planejamento Financeiro com IA**, **FASE 9 — Assistente Financeiro com IA** e
+**FASE 10 — Multiusuário com Autenticação JWT**, além da fundação transversal (tratamento de erros,
+envelope de resposta, trilha de auditoria, soft delete, validadores de schema do MongoDB, OpenAPI,
+adaptador Ollama e logs por camada com `logback-spring.xml`).
 
 ## Fases
 
@@ -22,15 +23,25 @@ validadores de schema do MongoDB, OpenAPI e adaptador Ollama).
 | 7 | Fechamento mensal com scheduler e snapshot | ✅ Concluída |
 | 8 | Planejamento financeiro com IA | ✅ Concluída |
 | 9 | Assistente financeiro com IA | ✅ Concluída |
+| 10 | Multiusuário com autenticação JWT e gestão de usuários | ✅ Concluída |
 
 ## Como executar
 
 ```bash
-# com um MongoDB local em localhost:27017:
+# com um MongoDB local em localhost:27017 (usuário admin conforme doc/ddl-mongodb.md):
 mvn spring-boot:run
 # Swagger UI: http://localhost:8080/swagger-ui.html
 # Actuator:   http://localhost:8080/actuator/health
 ```
+
+Perfil de desenvolvimento (logs coloridos/verbosos, JWT de 2h, refresh de 14 dias):
+
+```bash
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+Em produção defina `JWT_SECRET` (>= 32 bytes) via variável de ambiente — o valor padrão no
+`application.yml` é apenas para desenvolvimento local.
 
 ```bash
 mvn clean test        # roda todos os testes + JaCoCo (falha abaixo de 90% de cobertura)
@@ -47,11 +58,14 @@ com.finance
 ├── domain          # entidades, enums, eventos, serviços de domínio, ports (in/out)
 ├── application     # casos de uso (CQRS-light), commands, queries, DTOs, mappers MapStruct, validadores
 ├── adapters.in.rest.v1      # controllers REST (/api/v1)
+├── adapters.in.rest.filter  # JwtAuthenticationFilter (Authorization: Bearer)
 ├── adapters.out.mongodb     # documents, repositories Spring Data, persistence mappers, adapters
+├── adapters.out.security    # JwtTokenProvider (jjwt), BcryptPasswordHasher, CurrentUser (SecurityContext)
 ├── adapters.out.audit       # AuditPort -> coleção audit_logs (valores antigos/novos em JSON)
 ├── adapters.out.events      # EventPublisherPort -> ApplicationEventPublisher do Spring
 ├── adapters.out.ollama      # AiProviderPort -> cliente HTTP do Ollama (padrão Strategy)
-├── config          # MongoConfig (Decimal128), MongoSchemaInitializer ($jsonSchema + índices)
+├── scheduler       # MonthlyClosingScheduler (multiusuário)
+├── config          # MongoConfig (Decimal128), MongoSchemaInitializer ($jsonSchema + índices), SecurityConfig, JwtProperties
 ├── documentation   # OpenAPI
 └── shared          # exceções, GlobalExceptionHandler, envelope de resposta, constantes, utils
 ```
@@ -59,38 +73,51 @@ com.finance
 As dependências apontam para dentro: `application` depende só de `domain`; adapters dependem de
 ambos; o núcleo não conhece tipos de Spring Web/Data além dos registros de query com `Pageable`.
 
+> **Autenticação (FASE 10)**: todos os endpoints, exceto `POST /api/v1/users`, `POST /api/v1/auth/login`,
+> `POST /api/v1/auth/refresh-token`, health e Swagger, exigem `Authorization: Bearer <accessToken>`.
+> O `userId` do token substitui o antigo `LOCAL_USER` em todos os casos de uso e adapters.
+
 ## APIs (v1)
 
-| Método | Caminho | Descrição | Sucesso |
-|--------|---------|-----------|---------|
-| POST | `/api/v1/accounts` | Criar conta | 201 + envelope |
-| GET | `/api/v1/accounts/{id}` | Buscar conta por id | 200 |
-| GET | `/api/v1/accounts?type=&active=&page=&size=&sort=` | Listar/filtrar/paginar/ordenar | 200 |
-| PUT | `/api/v1/accounts/{id}` | Alterar conta | 200 |
-| DELETE | `/api/v1/accounts/{id}` | Exclusão lógica | 204 |
-| POST | `/api/v1/incomes` | Registrar receita | 201 |
-| GET | `/api/v1/incomes/{id}` | Buscar receita por id | 200 |
-| GET | `/api/v1/incomes?accountId=&startDate=&endDate=&page=&size=&sort=` | Listar por conta/período | 200 |
-| PUT | `/api/v1/incomes/{id}` | Alterar receita | 200 |
-| DELETE | `/api/v1/incomes/{id}` | Exclusão lógica | 204 |
-| POST | `/api/v1/categories` | Criar categoria | 201 |
-| GET | `/api/v1/categories/{id}` | Buscar categoria por id | 200 |
-| GET | `/api/v1/categories?classification=&active=&page=&size=&sort=` | Listar/filtrar/paginar/ordenar | 200 |
-| PUT | `/api/v1/categories/{id}` | Alterar categoria | 200 |
-| DELETE | `/api/v1/categories/{id}` | Exclusão lógica | 204 |
-| POST | `/api/v1/financial-analysis` | Gerar análise financeira com IA | 201 |
-| GET | `/api/v1/financial-analysis/{id}` | Buscar análise por id | 200 |
-| GET | `/api/v1/financial-analysis?page=&size=` | Histórico de análises | 200 |
-| GET | `/api/v1/daily-balance?startDate=&endDate=` | Saldo diário acumulado | 200 |
-| POST | `/api/v1/monthly-closings` | Gerar fechamento mensal (snapshot + auditoria) | 201 |
-| GET | `/api/v1/monthly-closings/{id}` | Buscar fechamento por id | 200 |
-| GET | `/api/v1/monthly-closings` | Listar fechamentos | 200 |
-| POST | `/api/v1/financial-plans` | Criar plano de economia com IA | 201 |
-| GET | `/api/v1/financial-plans/{id}` | Buscar plano por id | 200 |
-| GET | `/api/v1/financial-plans?page=&size=` | Histórico de planos | 200 |
-| POST | `/api/v1/assistant/questions` | Perguntar ao assistente financeiro (IA) | 201 |
-| GET | `/api/v1/assistant/questions/{id}` | Buscar pergunta/resposta por id | 200 |
-| GET | `/api/v1/assistant/questions?page=&size=` | Histórico de perguntas | 200 |
+| Método | Caminho | Descrição | Sucesso | Auth |
+|--------|---------|-----------|---------|------|
+| POST | `/api/v1/users` | Cadastrar usuário (e-mail, CPF, senha BCrypt, ativo) | 201 | pública |
+| GET | `/api/v1/users?page=&size=&active=` | Listar usuários (paginação + filtro) | 200 | Bearer |
+| GET | `/api/v1/users/{id}` | Detalhar usuário | 200 | Bearer |
+| PUT | `/api/v1/users/{id}` | Editar e-mail/CPF (só o próprio) | 200 | Bearer |
+| POST | `/api/v1/users/{id}/deactivate` | Desativar usuário (só o próprio) | 200 | Bearer |
+| POST | `/api/v1/auth/login` | Autenticar (e-mail + senha) → accessToken + refreshToken | 200 | pública |
+| POST | `/api/v1/auth/refresh-token` | Renovar accessToken (rotativo — token antigo revogado) | 200 | pública |
+| POST | `/api/v1/auth/logout` | Revogar todos os refresh tokens do usuário | 200 | Bearer |
+| GET | `/api/v1/auth/me` | Usuário autenticado (403 se inativo) | 200 | Bearer |
+| POST | `/api/v1/accounts` | Criar conta | 201 + envelope | Bearer |
+| GET | `/api/v1/accounts/{id}` | Buscar conta por id | 200 | Bearer |
+| GET | `/api/v1/accounts?type=&active=&page=&size=&sort=` | Listar/filtrar/paginar/ordenar | 200 | Bearer |
+| PUT | `/api/v1/accounts/{id}` | Alterar conta | 200 | Bearer |
+| DELETE | `/api/v1/accounts/{id}` | Exclusão lógica | 204 | Bearer |
+| POST | `/api/v1/incomes` | Registrar receita | 201 | Bearer |
+| GET | `/api/v1/incomes/{id}` | Buscar receita por id | 200 | Bearer |
+| GET | `/api/v1/incomes?accountId=&startDate=&endDate=&page=&size=&sort=` | Listar por conta/período | 200 | Bearer |
+| PUT | `/api/v1/incomes/{id}` | Alterar receita | 200 | Bearer |
+| DELETE | `/api/v1/incomes/{id}` | Exclusão lógica | 204 | Bearer |
+| POST | `/api/v1/categories` | Criar categoria | 201 | Bearer |
+| GET | `/api/v1/categories/{id}` | Buscar categoria por id | 200 | Bearer |
+| GET | `/api/v1/categories?classification=&active=&page=&size=&sort=` | Listar/filtrar/paginar/ordenar | 200 | Bearer |
+| PUT | `/api/v1/categories/{id}` | Alterar categoria | 200 | Bearer |
+| DELETE | `/api/v1/categories/{id}` | Exclusão lógica | 204 | Bearer |
+| POST | `/api/v1/financial-analysis` | Gerar análise financeira com IA | 201 | Bearer |
+| GET | `/api/v1/financial-analysis/{id}` | Buscar análise por id | 200 | Bearer |
+| GET | `/api/v1/financial-analysis?page=&size=` | Histórico de análises | 200 | Bearer |
+| GET | `/api/v1/daily-balance?startDate=&endDate=` | Saldo diário acumulado | 200 | Bearer |
+| POST | `/api/v1/monthly-closings` | Gerar fechamento mensal (snapshot + auditoria) | 201 | Bearer |
+| GET | `/api/v1/monthly-closings/{id}` | Buscar fechamento por id | 200 | Bearer |
+| GET | `/api/v1/monthly-closings` | Listar fechamentos | 200 | Bearer |
+| POST | `/api/v1/financial-plans` | Criar plano de economia com IA | 201 | Bearer |
+| GET | `/api/v1/financial-plans/{id}` | Buscar plano por id | 200 | Bearer |
+| GET | `/api/v1/financial-plans?page=&size=` | Histórico de planos | 200 | Bearer |
+| POST | `/api/v1/assistant/questions` | Perguntar ao assistente financeiro (IA) | 201 | Bearer |
+| GET | `/api/v1/assistant/questions/{id}` | Buscar pergunta/resposta por id | 200 | Bearer |
+| GET | `/api/v1/assistant/questions?page=&size=` | Histórico de perguntas | 200 | Bearer |
 
 Parâmetros de listagem:
 - Contas: `type` (`CONTA_CORRENTE`, `POUPANCA`, `CARTAO_CREDITO`, `DINHEIRO`, `INVESTIMENTO`),
@@ -111,15 +138,18 @@ Erros usam `{"timestamp", "status", "error", "message", "details"}` com os códi
 | Situação | HTTP |
 |-----------|------|
 | Falha de Bean Validation, corpo malformado, valor ≤ 0, `receivedAt` futuro, enum desconhecido | 400 |
-| Autenticação ausente (reservado) / acesso proibido (reservado) | 401 / 403 |
-| Conta ou receita não encontrada (ou já excluída logicamente) | 404 |
-| Nome de conta duplicado (case-insensitive) | 409 |
+| Autenticação ausente, token inválido ou expirado (JWT) | 401 |
+| Acesso proibido (editar/desativar usuário alheio, login de usuário inativo) | 403 |
+| Conta, receita ou usuário não encontrado (ou já excluído logicamente) | 404 |
+| Nome de conta duplicado, e-mail ou CPF já cadastrado (case-insensitive) | 409 |
 | Regra de negócio violada (ex.: receita em conta inativa) | 422 |
 | Falha de banco de dados | 500 |
 | Ollama indisponível / erro do provedor de IA | 503 |
 
 ## Modelo de dados (MongoDB)
 
+- `users`: `_id, email (único), cpf (único), passwordHash (BCrypt), active, deleted, deletedAt, createdAt, updatedAt` — credenciais de acesso; validador `$jsonSchema` + índices únicos em `email` e `cpf`. **Nunca exposto na API nem na auditoria** (`passwordHash` sai do snapshot de auditoria e do DTO de resposta).
+- `refresh_tokens`: `_id, userId, tokenHash (único — SHA-256 do token), expiresAt (TTL index), revoked, revokedAt, deleted, deletedAt, createdAt, updatedAt` — rotação a cada refresh; logout revoga todos do usuário.
 - `accounts`: `_id, userId, name (indexado), description, type, active, deleted, deletedAt, createdAt, updatedAt` — validador `$jsonSchema`, unicidade de nome tratada no caso de uso, índices em `userId+name`, `type`, `active`, `deleted`.
 - `incomes`: `_id, userId, accountId (indexado), description, amount (Decimal128), receivedAt (data), deleted, deletedAt, createdAt, updatedAt` — validador + índices em `userId+receivedAt` e `accountId+receivedAt`.
 - `categories`: `_id, userId, name, description, classification (DESPESA/RECEITA), active, deleted, deletedAt, createdAt, updatedAt` — validador `$jsonSchema` com enum de classificação, índices em `userId+name`, `classification`, `active`, `deleted`.
@@ -358,6 +388,66 @@ Feature: Assistente financeiro
     E nada é gravado no histórico
 ```
 
+```gherkin
+Feature: Autenticação e usuários (FASE 10)
+
+  Cenário: Cadastrar usuário
+    Dado que o usuário informa e-mail, CPF válido e senha
+    Quando executa o cadastro
+    Então a senha é armazenada como hash BCrypt (nunca em texto puro)
+    E o campo active pode ser true ou false (padrão true)
+    E a resposta nunca contém passwordHash
+    E a auditoria registra CRIACAO com snapshot sem senha
+
+  Cenário: E-mail ou CPF duplicado
+    Dado que já existe usuário com o mesmo e-mail ou CPF
+    Quando executa o cadastro
+    Então a API retorna 409
+
+  Cenário: Login
+    Dado credenciais válidas e usuário ativo
+    Quando executa POST /api/v1/auth/login
+    Então a resposta contém accessToken (15 min) e refreshToken (7 dias, rotativo)
+
+  Cenário: Login negado
+    Dado senha incorreta, usuário inexistente ou usuário inativo
+    Quando executa o login
+    Então a API retorna 401 ou 403 sem detalhes internos
+
+  Cenário: Renovar token
+    Dado um refreshToken válido e não revogado
+    Quando executa POST /api/v1/auth/refresh-token
+    Então um novo accessToken é emitido
+    E o refreshToken antigo é revogado (rotação)
+
+  Cenário: Logout
+    Dado um usuário autenticado
+    Quando executa POST /api/v1/auth/logout
+    Então todos os refresh tokens do usuário são revogados
+
+  Cenário: Requisições autenticadas
+    Dado um accessToken válido no header Authorization: Bearer
+    Quando qualquer endpoint protegido é chamado
+    Então o userId do token é usado em todas as leituras e escritas
+    E cada usuário só enxerga os próprios dados
+
+  Cenário: Editar usuário
+    Dado que o usuário autenticado é o dono do cadastro
+    Quando executa PUT /api/v1/users/{id} com novo e-mail/CPF
+    Então os dados são atualizados
+    E a auditoria registra ATUALIZACAO com snapshot sem senha
+    Dado que o id pertence a outro usuário
+    Quando executa PUT /api/v1/users/{id}
+    Então a API retorna 403 (antes de revelar existência)
+
+  Cenário: Desativar usuário
+    Dado que o usuário é o dono da conta
+    Quando executa POST /api/v1/users/{id}/deactivate
+    Então active=false com auditoria
+    E o login deixa de ser aceito (403)
+    E /me com token ainda válido retorna 403
+```
+
 ## Definition of Done
 
 - [x] Camadas hexagonais respeitadas (domain ← application ← adapters)
@@ -368,17 +458,18 @@ Feature: Assistente financeiro
 - [x] FASE 7: fechamento mensal com scheduler (`@Scheduled` cron, mês anterior), snapshot persistido em `monthly_closings`, idempotente por mês e com auditoria CRIACAO/ATUALIZACAO
 - [x] FASE 8: plano de economia com IA a partir de uma meta (valor/data alvo opcionais), histórico em `financial_plans`, auditoria e evento
 - [x] FASE 9: assistente financeiro que responde com o contexto dos dados cadastrados, histórico em `assistant_messages`, auditoria e evento
+- [x] FASE 10: multiusuário com autenticação JWT — cadastro de usuário (BCrypt + CPF validado), login/refresh rotativo/logout/me, gestão de usuários (listagem, edição, desativação), auditoria sem senha, `userId` do token em todos os casos de uso e scheduler multiusuário
 - [x] Alteração renova `updatedAt` e registra auditoria com oldValue/newValue
 - [x] Exclusão lógica (`deleted`/`deletedAt`) com auditoria — sem exclusão física
 - [x] Exceções obrigatórias + GlobalExceptionHandler com os códigos HTTP exigidos
 - [x] Envelope padrão em todas as respostas
 - [x] DTOs como records, MapStruct em todo mapeamento, Bean Validation nas entradas
-- [x] Campo `userId` pronto para multiusuário (`LOCAL_USER` por enquanto)
 - [x] MongoDB com validadores `$jsonSchema`, índices, money em Decimal128, datas BSON
 - [x] Swagger UI (`/swagger-ui.html`) + actuator health/info/metrics
 - [x] Adaptador Ollama atrás de `AiProviderPort` (testado com WireMock)
-- [x] 185 testes (unitários + integração de API em MongoDB embutido e WireMock), **90,8% de cobertura de linhas** (gate JaCoCo ≥ 90%)
-- [ ] Autenticação JWT e multiusuário — próximos passos
+- [x] Logs coloridos por nível (ERROR/WARN/INFO/DEBUG) e por camada (app, Mongo, IA) via `logback-spring.xml`
+- [x] 256 testes (unitários + integração de API em MongoDB embutido e WireMock), gate JaCoCo ≥ 90% de cobertura
+- [x] Dependências sem vulnerabilidades conhecidas (Spring Boot 3.5.16 + overrides `commons-lang3` 3.21.0 e `log4j-api` 2.26.1)
 
 ## Notas de ferramentas de teste
 

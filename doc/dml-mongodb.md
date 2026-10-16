@@ -96,7 +96,33 @@ db.assistant_messages.insertOne({
   provider: "ollama", model: "llama3",
   deleted: false, deletedAt: null, createdAt: new Date(), updatedAt: new Date()
 });
+
+// Usuário (FASE 10) — passwordHash é BCrypt da senha; e-mail e cpf são únicos
+const userId = UUID().toString();
+db.users.insertOne({
+  _id: userId,
+  email: "marcelo@test.com",
+  cpf: "52998224725",
+  passwordHash: "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy",
+  active: true,
+  deleted: false, deletedAt: null,
+  createdAt: new Date(), updatedAt: new Date()
+});
+
+// Refresh token (FASE 10) — tokenHash é o SHA-256 do token em claro (nunca o token)
+db.refresh_tokens.insertOne({
+  _id: UUID().toString(),
+  userId: userId,
+  tokenHash: "f6c3d1a5b9e84c72a0d1f4b8e3c65792a4b1d8f0c3e57a29b4d6f1a8c3e5b790",
+  expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+  revoked: false, revokedAt: null,
+  deleted: false, deletedAt: null,
+  createdAt: new Date(), updatedAt: new Date()
+});
 ```
+
+> Desde a FASE 10 o `userId` dos registros vem do **JWT** (login), não é mais o literal
+> `LOCAL_USER` — que aqui nos exemplos representa o id de um usuário criado em `users`.
 
 ---
 
@@ -154,6 +180,21 @@ db.incomes.find({ deleted: false, accountId: accountId, receivedAt: { $gte: star
 
 // Histórico de auditoria de uma conta
 db.audit_logs.find({ entityType: "Account", entityId: accountId }).sort({ createdAt: -1 });
+
+// Auditoria de usuário (FASE 10): snapshot SEM senha — apenas id/email/cpf/active
+db.audit_logs.find({ entityType: "User" }).sort({ createdAt: -1 });
+
+// Usuários (FASE 10)
+db.users.find({ email: "marcelo@test.com", deleted: false });          // login (por e-mail)
+db.users.find({ active: true, deleted: false }).sort({ createdAt: -1 }); // GET /users?active=true
+db.users.countDocuments({ active: true, deleted: false });             // scheduler: usuários ativos
+
+// Refresh tokens de um usuário (revogar tudo = logout)
+db.refresh_tokens.find({ userId: userId, revoked: false, deleted: false });
+db.refresh_tokens.updateMany(
+  { userId: userId, revoked: false, deleted: false },
+  { $set: { revoked: true, revokedAt: new Date(), updatedAt: new Date() } }
+);
 ```
 
 ## 5. Aggregations (relatórios)
@@ -198,6 +239,8 @@ db.monthly_closings.deleteMany({});
 db.financial_plans.deleteMany({});
 db.assistant_messages.deleteMany({});
 db.audit_logs.deleteMany({});
+db.users.deleteMany({});
+db.refresh_tokens.deleteMany({});
 ```
 
 > Nunca rode a seção 6 em produção — a exclusão física rompe o histórico de auditoria.

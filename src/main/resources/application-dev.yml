@@ -1,0 +1,38 @@
+# Perfil DEV — testes locais
+# Ativa com:  mvn spring-boot:run -Dspring-boot.run.profiles=dev
+# Ou pela IDE: Active profiles = dev
+#
+# Diferencas do application.yml (producao):
+# - Logs coloridos e verbosos (logback-spring.xml usa o perfil "dev"):
+#     com.finance em DEBUG (use cases, prompts e respostas da IA visiveis)
+#     Ollama/IA em DEBUG, RestTemplate em DEBUG
+#     Mongo (driver e Spring Data) continua em WARN
+# - Segredo JWT padrao de desenvolvimento (NUNCA usar em producao; la use JWT_SECRET)
+# - Credenciais Mongo locais (admin/admin123 conforme DDL da documentacao)
+
+spring:
+  data:
+    mongodb:
+      host: localhost
+      port: 27017
+      database: financial_control
+      username: admin
+      password: admin123
+      authentication-database: admin
+      auto-index-creation: false
+
+security:
+  jwt:
+    secret: "dev-only-secret-troque-em-producao-com-JWT_SECRET"
+    issuer: ia-financial
+    access-token-ttl: PT2H
+    refresh-token-ttl: PT336H
+
+logging:
+  level:
+    com.finance: DEBUG
+    com.finance.adapters.out.ai: DEBUG
+    org.springframework.web.client.RestTemplate: DEBUG
+    org.mongodb.driver: WARN
+    org.springframework.data.mongodb: WARN
+    org.springframework.security: WARN

@@ -14,8 +14,9 @@ Sistema de controle financeiro pessoal com IA, em **Java 21 + Spring Boot 3.5.6*
 | Camada | Tecnologia |
 |---|---|
 | Linguagem / Runtime | Java 21 |
-| Framework | Spring Boot 3.5.6 (Web, Data MongoDB, Validation, Scheduling, Actuator) |
+| Framework | Spring Boot 3.5.16 (Web, Data MongoDB, Validation, Scheduling, Security, Actuator) |
 | Banco | MongoDB 7.0 (coleções com validadores `$jsonSchema` + índices) |
+| Autenticação | JWT HS256 (jjwt 0.13.0), BCrypt (spring-security-crypto), refresh token rotativo |
 | Mapeamento | MapStruct (DTO ↔ domínio ↔ documento) |
 | Documentação | springdoc-openapi (Swagger UI em `/swagger-ui.html`) |
 | IA | Ollama (HTTP, `/api/generate`) atrás de `AiProviderPort` |
@@ -30,28 +31,32 @@ flowchart TD
     subgraph adapters["Camada de Adapters (infraestrutura)"]
         direction LR
         REST["REST Controllers<br/>/api/v1 (adapters.in.rest)"]
+        JWT["JwtAuthenticationFilter<br/>Authorization: Bearer"]
         MONGO["MongoDB Adapters<br/>(adapters.out.mongodb)"]
         AUDIT["AuditAdapter<br/>audit_logs"]
         EVENTS["SpringEventPublisher<br/>(ApplicationEventPublisher)"]
         OLLAMA["OllamaAdapter<br/>AiProviderPort"]
-        SCHED["MonthlyClosingScheduler<br/>@Scheduled"]
+        SEC["Security Adapters<br/>JwtTokenProvider, BcryptHasher,<br/>CurrentUser (SecurityContext)"]
+        SCHED["MonthlyClosingScheduler<br/>@Scheduled multiusuário"]
     end
 
     subgraph application["Camada de Aplicação"]
-        UC["Casos de uso<br/>(CreateAccount, ListIncomes,<br/>GenerateFinancialAnalysis, ...)"]
-        VAL["Validadores<br/>(AccountValidator, CategoryValidator)"]
+        UC["Casos de uso<br/>(Authenticate, RegisterUser, CreateAccount,<br/>ListIncomes, GenerateFinancialAnalysis, ...)"]
+        VAL["Validadores<br/>(AccountValidator, CategoryValidator,<br/>UserValidator, CpfValidator)"]
         MAP["Mappers MapStruct<br/>(DTO ↔ Command/Query)"]
     end
 
     subgraph domain["Camada de Domínio (núcleo)"]
-        MODEL["Modelos<br/>(Account, Income, Category,<br/>MonthlyClosing, FinancialPlan,<br/>AssistantMessage, FinancialAnalysis)"]
+        MODEL["Modelos<br/>(User, RefreshToken, Account, Income, Category,<br/>MonthlyClosing, FinancialPlan,<br/>AssistantMessage, FinancialAnalysis)"]
         PORTIN["Portas de entrada<br/>(Use Cases interfaces)"]
-        PORTOUT["Portas de saída<br/>(RepositoryPort, AuditPort,<br/>AiProviderPort, EventPublisherPort)"]
+        PORTOUT["Portas de saída<br/>(RepositoryPort, AuditPort,<br/>AiProviderPort, EventPublisherPort,<br/>TokenProviderPort, PasswordHasherPort, CurrentUserPort)"]
         DSVC["Serviços de domínio<br/>(score, prompts, parsing)"]
     end
 
-    DB[("MongoDB 7.0<br/>8 coleções")]
+    DB[("MongoDB 7.0<br/>10 coleções")]
 
+    REST --> JWT
+    JWT --> PORTIN
     REST --> PORTIN
     SCHED --> PORTIN
     UC --> PORTOUT
@@ -64,6 +69,7 @@ flowchart TD
     MONGO -. "implementa" .-> PORTOUT
     AUDIT -. "implementa" .-> PORTOUT
     OLLAMA -. "implementa" .-> PORTOUT
+    SEC -. "implementa" .-> PORTOUT
     EVENTS -. "implementa" .-> PORTOUT
 ```
 
@@ -77,8 +83,9 @@ e consumidas por controllers e scheduler; as portas de saída são implementadas
 
 ```mermaid
 erDiagram
+    USERS ||--o{ REFRESH_TOKENS : "userId"
     ACCOUNTS ||--o{ INCOMES : "accountId"
-    ACCOUNTS }o--|| USERS : "userId (LOCAL_USER)"
+    ACCOUNTS }o--|| USERS : "userId (do JWT)"
     CATEGORIES {
         string _id
         string userId
@@ -86,6 +93,21 @@ erDiagram
         string classification "DESPESA|RECEITA"
         bool active
         bool deleted
+    }
+    USERS {
+        string _id
+        string email "único"
+        string cpf "único"
+        string passwordHash "BCrypt"
+        bool active
+        bool deleted
+    }
+    REFRESH_TOKENS {
+        string _id
+        string userId
+        string tokenHash "SHA-256, único"
+        date expiresAt "índice TTL"
+        bool revoked
     }
     ACCOUNTS {
         string _id
@@ -215,7 +237,38 @@ sequenceDiagram
     U-->>C: 201 + envelope {data: análise, score, recommendations}
 ```
 
-### 4.3 Fechamento mensal agendado (FASE 7)
+### 4.3 Autenticação (login + refresh rotativo) — FASE 10
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Cliente HTTP
+    participant F as JwtAuthenticationFilter
+    participant A as AuthController
+    participant U as AuthenticateUseCaseImpl
+    participant H as PasswordHasherPort (BCrypt)
+    participant R as RefreshTokenRepositoryPort
+    participant T as TokenProviderPort (jjwt)
+    C->>A: POST /api/v1/auth/login {"email", "password"}
+    A->>U: handle(LoginCommand)
+    U->>U: findByEmail (401 se não existe)
+    U->>H: matches(password, passwordHash)
+    U->>U: active? (403 se inativo)
+    U->>T: generateAccessToken(userId, email)
+    U->>T: generateRefreshToken()
+    U->>R: save(tokenHash=SHA-256, expiresAt=+7d)
+    U-->>A: AuthSession
+    A-->>C: 200 {data: {accessToken, refreshToken, user}}
+    Note over C,T: Requisições seguintes: Authorization: Bearer accessToken<br/>F valida assinatura/expiração e injeta userId no contexto
+    C->>A: POST /api/v1/auth/refresh-token {"refreshToken"}
+    A->>U: handle(RefreshCommand)
+    U->>R: findByTokenHash (SHA-256) — 401 se revogado/expirado
+    U->>R: revoke(old) + save(new hash)
+    U->>T: novo accessToken
+    A-->>C: 200 {data: {accessToken, refreshToken (novo)}}
+```
+
+### 4.4 Fechamento mensal agendado (FASE 7)
 
 ```mermaid
 flowchart TD
@@ -239,6 +292,8 @@ flowchart TD
 
 | Coleção | Uso | Índices |
 |---|---|---|
+| `users` | Credenciais de acesso (BCrypt; e-mail e CPF únicos) | `email` único, `cpf` único, `active`, `deleted` |
+| `refresh_tokens` | Refresh tokens rotativos (hash SHA-256, TTL) | `tokenHash` único, `userId+createdAt DESC`, `expiresAt` (TTL) |
 | `accounts` | Contas financeiras do usuário | `userId+name`, `type`, `active`, `deleted` |
 | `incomes` | Receitas (valores em Decimal128, `receivedAt` como BSON date UTC) | `userId+receivedAt DESC`, `accountId+receivedAt DESC`, `deleted` |
 | `categories` | Categorias com classificação `DESPESA`/`RECEITA` | `userId+name`, `classification`, `active`, `deleted` |
@@ -268,6 +323,15 @@ DDL completo (validadores `$jsonSchema` + `createIndex`) em [ddl-mongodb.md](ddl
    depende do humor do LLM; o LLM fornece texto e recomendações.
 7. **Envelope único** `{"data", "message", "timestamp"}` e erros `{"timestamp","status","error",
    "message","details"}`.
+8. **Senhas com BCrypt, tokens com SHA-256**: o banco nunca guarda a senha nem o refresh token em
+   claro — só o hash; o snapshot de auditoria do usuário (CRIACAO/ATUALIZACAO) contém apenas
+   `id/email/cpf/active`, nunca o `passwordHash`.
+9. **JWT HS256 atrás de portas** (`TokenProviderPort`, `PasswordHasherPort`, `CurrentUserPort`):
+   trocar jjwt/BCrypt/SecurityContext não toca no domínio; o segredo vem de `JWT_SECRET`.
+10. **Refresh token rotativo**: cada uso revoga o antigo e emite um novo (`tokenHash` único +
+    índice TTL em `expiresAt`); logout revoga todos os tokens do usuário.
+11. **Multiusuário pelo token**: toda leitura/escrita usa o `userId` do JWT (`CurrentUserPort`);
+    controllers e adapters não recebem `userId` do cliente — usuário só edita/desativa a própria conta.
 
 ---
 
@@ -276,9 +340,10 @@ DDL completo (validadores `$jsonSchema` + `createIndex`) em [ddl-mongodb.md](ddl
 | Situação | HTTP | Exceção |
 |---|---|---|
 | Bean Validation, corpo malformado, valor ≤ 0, data futura, enum desconhecido | 400 | `ValidationException` / `MalformedRequestException` / `InvalidEnumException` |
-| Não autenticado / sem permissão (reservado p/ JWT) | 401 / 403 | `UnauthorizedException` / `ForbiddenException` |
+| Não autenticado, token inválido ou expirado | 401 | `UnauthorizedException` / entrada do `JwtAuthenticationFilter` |
+| Acesso proibido (usuário alheio, usuário inativo) | 403 | `ForbiddenException` |
 | Recurso inexistente ou já excluído logicamente | 404 | `NotFoundException` |
-| Nome duplicado (conta/categoria) | 409 | `ConflictException` |
+| Nome duplicado (conta/categoria) ou e-mail/CPF já cadastrado | 409 | `ConflictException` |
 | Regra de negócio (receita em conta inativa) | 422 | `BusinessRuleException` |
 | Falha de banco | 500 | `DatabaseException` |
 | Provedor de IA indisponível | 503 | `ExternalServiceException` |
@@ -294,12 +359,14 @@ com.finance
 ├── domain          # entidades, enums, eventos, ports (in/out), serviços de domínio
 ├── application     # use cases (CQRS-light), commands, queries, DTOs, mappers, validadores
 ├── adapters.in.rest.v1          # controllers REST versionados
+├── adapters.in.rest.filter      # JwtAuthenticationFilter
 ├── adapters.out.mongodb         # documents, repositories, persistence mappers, adapters
+├── adapters.out.security        # JwtTokenProvider, BcryptPasswordHasher, CurrentUser
 ├── adapters.out.audit           # AuditPort -> audit_logs
 ├── adapters.out.events          # EventPublisherPort -> Spring events
 ├── adapters.out.ollama          # AiProviderPort -> Ollama HTTP
-├── scheduler       # MonthlyClosingScheduler
-├── config          # MongoConfig, MongoSchemaInitializer, SchedulingConfig, OpenAPI
+├── scheduler       # MonthlyClosingScheduler (multiusuário)
+├── config          # MongoConfig, MongoSchemaInitializer, SchedulingConfig, SecurityConfig, JwtProperties, OpenAPI
 ├── documentation   # anotações OpenAPI
 └── shared          # exceptions, handler, envelope, constants, utils
 ```
@@ -307,6 +374,7 @@ com.finance
 ## 8. Como executar / testar
 
 ```bash
-mvn spring-boot:run          # aplica + Mongo local localhost:27017
-mvn clean test               # 185 testes + gate JaCoCo 90% (Mongo embutido + WireMock)
+mvn spring-boot:run                        # aplica + Mongo local localhost:27017
+mvn spring-boot:run -Dspring-boot.run.profiles=dev   # perfil dev (logs coloridos, JWT 2h)
+mvn clean test               # 256 testes + gate JaCoCo 90% (Mongo embutido + WireMock)
 ```

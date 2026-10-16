@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "9f1c2a34-5b6d-4e7f-8a90-b1c2d3e4f5a6",
     "name": "IA-Financial API",
-    "description": "Coleção completa da API IA-Financial (FASES 1 a 9).\n\n**Como usar:**\n1. Importe este arquivo e o environment `IA-Financial.postman_environment.json`.\n2. Selecione o environment **IA-Financial Local**.\n3. Rode as pastas na ordem (Contas → Receitas → Categorias → Saldo → Fechamento → IA): os ids criados são salvos automaticamente em variáveis de coleção pelos scripts de teste.\n\nPré-requisitos: aplicação em `http://localhost:8080` com MongoDB local no ar. Para os endpoints de IA (Análises, Planos, Assistente), é necessário Ollama em `http://localhost:11434` (nos testes automatizados ele é simulado com WireMock).",
+    "description": "Coleção completa da API IA-Financial (FASES 1 a 10).\n\n**Como usar:**\n1. Importe este arquivo e o environment `IA-Financial.postman_environment.json`.\n2. Selecione o environment **IA-Financial Local**.\n3. Rode as pastas na ordem (0-Auth (Login primeiro) → Contas → Receitas → Categorias → Saldo → Fechamento → IA): os ids criados são salvos automaticamente em variáveis de coleção pelos scripts de teste.\n\nPré-requisitos: aplicação em `http://localhost:8080` com MongoDB local no ar. Para os endpoints de IA (Análises, Planos, Assistente), é necessário Ollama em `http://localhost:11434` (nos testes automatizados ele é simulado com WireMock).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -20,16 +20,293 @@
     }
   ],
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:8080" },
-    { "key": "accountId", "value": "" },
-    { "key": "incomeId", "value": "" },
-    { "key": "categoryId", "value": "" },
-    { "key": "analysisId", "value": "" },
-    { "key": "closingId", "value": "" },
-    { "key": "planId", "value": "" },
-    { "key": "questionId", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "accountId",
+      "value": ""
+    },
+    {
+      "key": "incomeId",
+      "value": ""
+    },
+    {
+      "key": "categoryId",
+      "value": ""
+    },
+    {
+      "key": "analysisId",
+      "value": ""
+    },
+    {
+      "key": "closingId",
+      "value": ""
+    },
+    {
+      "key": "planId",
+      "value": ""
+    },
+    {
+      "key": "questionId",
+      "value": ""
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    }
   ],
   "item": [
+    {
+      "name": "0-Auth (JWT)",
+      "description": "Autenticação JWT (FASE 10). O Login salva accessToken, refreshToken e userId automaticamente.",
+      "item": [
+        {
+          "name": "Cadastrar usuário",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"marcelo@test.com\",\n  \"cpf\": \"52998224725\",\n  \"password\": \"Senha@123\",\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Usuário criado (201)', () => pm.response.to.have.status(201));",
+                  "const userId = pm.response.json().data.id;",
+                  "pm.collectionVariables.set('userId', userId);",
+                  "pm.collectionVariables.set('userEmail', pm.response.json().data.email);",
+                  "console.log('userId salvo:', userId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"marcelo@test.com\",\n  \"password\": \"Senha@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login ok (200)', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.collectionVariables.set('accessToken', data.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', data.refreshToken);",
+                  "pm.collectionVariables.set('userId', data.user.id);",
+                  "console.log('accessToken e refreshToken salvos');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Renovar token (refresh rotativo)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh-token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "refresh-token"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Refresh ok (200)', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.collectionVariables.set('accessToken', data.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', data.refreshToken);",
+                  "console.log('tokens rotacionados');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Me ok (200)', () => pm.response.to.have.status(200));",
+                  "pm.test('Retorna usuário logado', () => pm.expect(pm.response.json().data.email).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Logout ok (200)', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('accessToken', '');",
+                  "pm.collectionVariables.set('refreshToken', '');",
+                  "console.log('tokens revogados e limpos');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
     {
       "name": "Health",
       "item": [
@@ -37,11 +314,21 @@
           "name": "Health check",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/actuator/health",
-              "host": ["{{baseUrl}}"],
-              "path": ["actuator", "health"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
             },
             "description": "Status da aplicação e do banco."
           },
@@ -72,17 +359,34 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Banco Principal\",\n  \"description\": \"Conta corrente principal\",\n  \"type\": \"CONTA_CORRENTE\",\n  \"active\": true\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/accounts",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "accounts"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "accounts"
+              ]
             },
             "description": "Cria uma conta. Tipos válidos: CONTA_CORRENTE, POUPANCA, CARTAO_CREDITO, DINHEIRO, INVESTIMENTO. Nome duplicado (case-insensitive) retorna 409."
           },
@@ -92,17 +396,43 @@
           "name": "Listar contas (filtros + paginação)",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/accounts?type=CONTA_CORRENTE&active=true&page=0&size=20&sort=name,asc",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "accounts"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "accounts"
+              ],
               "query": [
-                { "key": "type", "value": "CONTA_CORRENTE" },
-                { "key": "active", "value": "true" },
-                { "key": "page", "value": "0" },
-                { "key": "size", "value": "20" },
-                { "key": "sort", "value": "name,asc" }
+                {
+                  "key": "type",
+                  "value": "CONTA_CORRENTE"
+                },
+                {
+                  "key": "active",
+                  "value": "true"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                },
+                {
+                  "key": "sort",
+                  "value": "name,asc"
+                }
               ]
             },
             "description": "Listagem com filtro por tipo/situação, paginação e ordenação (ex.: name,desc)."
@@ -113,11 +443,23 @@
           "name": "Buscar conta por id",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/accounts/{{accountId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "accounts", "{{accountId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "accounts",
+                "{{accountId}}"
+              ]
             },
             "description": "Retorna 404 se a conta não existe ou foi excluída logicamente."
           },
@@ -139,17 +481,35 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Banco Principal Editado\",\n  \"description\": \"Conta editada via Postman\",\n  \"type\": \"CONTA_CORRENTE\",\n  \"active\": true\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/accounts/{{accountId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "accounts", "{{accountId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "accounts",
+                "{{accountId}}"
+              ]
             },
             "description": "Alteração com auditoria (oldValue/newValue) e atualização de updatedAt."
           },
@@ -170,11 +530,23 @@
           ],
           "request": {
             "method": "DELETE",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/accounts/{{accountId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "accounts", "{{accountId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "accounts",
+                "{{accountId}}"
+              ]
             },
             "description": "Soft delete: após isso, GET por id retorna 404, mas o documento permanece no banco com deleted=true."
           },
@@ -204,17 +576,34 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"accountId\": \"{{accountId}}\",\n  \"description\": \"Salário\",\n  \"amount\": 3500.50,\n  \"receivedAt\": \"2026-10-05\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/incomes",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "incomes"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "incomes"
+              ]
             },
             "description": "Usa a conta criada na pasta 1 (variável {{accountId}}). Valor deve ser > 0 e receivedAt não pode ser futuro. Conta inativa → 422; conta inexistente → 404."
           },
@@ -224,18 +613,47 @@
           "name": "Listar receitas (período + paginação)",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/incomes?accountId={{accountId}}&startDate=2026-10-01&endDate=2026-10-31&page=0&size=20&sort=receivedAt,desc",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "incomes"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "incomes"
+              ],
               "query": [
-                { "key": "accountId", "value": "{{accountId}}" },
-                { "key": "startDate", "value": "2026-10-01" },
-                { "key": "endDate", "value": "2026-10-31" },
-                { "key": "page", "value": "0" },
-                { "key": "size", "value": "20" },
-                { "key": "sort", "value": "receivedAt,desc" }
+                {
+                  "key": "accountId",
+                  "value": "{{accountId}}"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2026-10-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-10-31"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                },
+                {
+                  "key": "sort",
+                  "value": "receivedAt,desc"
+                }
               ]
             },
             "description": "Filtro por conta e período, paginação e ordenação."
@@ -246,11 +664,23 @@
           "name": "Buscar receita por id",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/incomes/{{incomeId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "incomes", "{{incomeId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "incomes",
+                "{{incomeId}}"
+              ]
             },
             "response": []
           },
@@ -272,17 +702,35 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"accountId\": \"{{accountId}}\",\n  \"description\": \"Salário ajustado\",\n  \"amount\": 3800,\n  \"receivedAt\": \"2026-10-05\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/incomes/{{incomeId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "incomes", "{{incomeId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "incomes",
+                "{{incomeId}}"
+              ]
             },
             "description": "Se trocar de conta, a nova conta é revalidada (existente e ativa)."
           },
@@ -303,11 +751,23 @@
           ],
           "request": {
             "method": "DELETE",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/incomes/{{incomeId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "incomes", "{{incomeId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "incomes",
+                "{{incomeId}}"
+              ]
             },
             "response": []
           },
@@ -336,17 +796,34 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Alimentação\",\n  \"description\": \"Mercado e restaurantes\",\n  \"classification\": \"DESPESA\",\n  \"active\": true\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/categories",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "categories"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categories"
+              ]
             },
             "description": "Classificação: DESPESA ou RECEITA. Nome duplicado → 409."
           },
@@ -356,17 +833,43 @@
           "name": "Listar categorias (filtro + paginação)",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/categories?classification=DESPESA&active=true&page=0&size=20&sort=name,asc",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "categories"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categories"
+              ],
               "query": [
-                { "key": "classification", "value": "DESPESA" },
-                { "key": "active", "value": "true" },
-                { "key": "page", "value": "0" },
-                { "key": "size", "value": "20" },
-                { "key": "sort", "value": "name,asc" }
+                {
+                  "key": "classification",
+                  "value": "DESPESA"
+                },
+                {
+                  "key": "active",
+                  "value": "true"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                },
+                {
+                  "key": "sort",
+                  "value": "name,asc"
+                }
               ]
             },
             "response": []
@@ -377,11 +880,23 @@
           "name": "Buscar categoria por id",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/categories/{{categoryId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "categories", "{{categoryId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categories",
+                "{{categoryId}}"
+              ]
             },
             "response": []
           },
@@ -403,17 +918,35 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Alimentação\",\n  \"description\": \"Atualizada via Postman\",\n  \"classification\": \"DESPESA\",\n  \"active\": true\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/categories/{{categoryId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "categories", "{{categoryId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categories",
+                "{{categoryId}}"
+              ]
             },
             "response": []
           },
@@ -434,11 +967,23 @@
           ],
           "request": {
             "method": "DELETE",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/categories/{{categoryId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "categories", "{{categoryId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "categories",
+                "{{categoryId}}"
+              ]
             },
             "response": []
           },
@@ -453,14 +998,31 @@
           "name": "Saldo diário acumulado (com período)",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/daily-balance?startDate=2026-10-01&endDate=2026-10-31",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "daily-balance"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "daily-balance"
+              ],
               "query": [
-                { "key": "startDate", "value": "2026-10-01" },
-                { "key": "endDate", "value": "2026-10-31" }
+                {
+                  "key": "startDate",
+                  "value": "2026-10-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-10-31"
+                }
               ]
             },
             "description": "Saldo por dia (totalIncome, totalExpense, balance) com coluna accumulated (acumulado até o dia)."
@@ -471,11 +1033,22 @@
           "name": "Saldo diário (sem filtros)",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/daily-balance",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "daily-balance"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "daily-balance"
+              ]
             },
             "response": []
           },
@@ -504,17 +1077,34 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"month\": \"2026-10\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/monthly-closings",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "monthly-closings"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "monthly-closings"
+              ]
             },
             "description": "Snapshot persistido com auditoria. Reexecutar o mesmo mês atualiza o snapshot (200/201 + audit ATUALIZACAO). O scheduler executa automaticamente no dia 1º às 00:05 para o mês anterior."
           },
@@ -525,17 +1115,34 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"month\": \"13/2026\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/monthly-closings",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "monthly-closings"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "monthly-closings"
+              ]
             },
             "description": "Formato exigido: yyyy-MM."
           },
@@ -545,11 +1152,22 @@
           "name": "Listar fechamentos",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/monthly-closings",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "monthly-closings"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "monthly-closings"
+              ]
             },
             "response": []
           },
@@ -559,11 +1177,23 @@
           "name": "Buscar fechamento por id",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/monthly-closings/{{closingId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "monthly-closings", "{{closingId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "monthly-closings",
+                "{{closingId}}"
+              ]
             },
             "response": []
           },
@@ -592,17 +1222,34 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"focus\": \"economia mensal\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/financial-analysis",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "financial-analysis"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "financial-analysis"
+              ]
             },
             "description": "Requer ao menos uma receita cadastrada. Usa o Ollama configurado em application.yml (ollama.base-url). Sem receitas → 400; Ollama indisponível → 503. Score 0–100 e recomendações retornadas; histórico persistido."
           },
@@ -612,11 +1259,23 @@
           "name": "Buscar análise por id",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/financial-analysis/{{analysisId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "financial-analysis", "{{analysisId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "financial-analysis",
+                "{{analysisId}}"
+              ]
             },
             "response": []
           },
@@ -626,14 +1285,31 @@
           "name": "Histórico de análises",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/financial-analysis?page=0&size=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "financial-analysis"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "financial-analysis"
+              ],
               "query": [
-                { "key": "page", "value": "0" },
-                { "key": "size", "value": "20" }
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
               ]
             },
             "response": []
@@ -663,17 +1339,34 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"goal\": \"Reserva de emergência\",\n  \"targetAmount\": 10000,\n  \"targetDate\": \"2027-12-31\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/financial-plans",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "financial-plans"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "financial-plans"
+              ]
             },
             "description": "Meta financeira processada pela IA com base nos dados cadastrados. targetAmount e targetDate são opcionais."
           },
@@ -683,11 +1376,23 @@
           "name": "Buscar plano por id",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/financial-plans/{{planId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "financial-plans", "{{planId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "financial-plans",
+                "{{planId}}"
+              ]
             },
             "response": []
           },
@@ -697,14 +1402,31 @@
           "name": "Histórico de planos",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/financial-plans?page=0&size=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "financial-plans"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "financial-plans"
+              ],
               "query": [
-                { "key": "page", "value": "0" },
-                { "key": "size", "value": "20" }
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
               ]
             },
             "response": []
@@ -734,17 +1456,35 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"question\": \"Quanto recebi em outubro?\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/assistant/questions",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "assistant", "questions"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assistant",
+                "questions"
+              ]
             },
             "description": "A IA responde usando apenas o contexto financeiro cadastrado. Histórico salvo em assistant_messages."
           },
@@ -754,11 +1494,24 @@
           "name": "Buscar pergunta por id",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/assistant/questions/{{questionId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "assistant", "questions", "{{questionId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assistant",
+                "questions",
+                "{{questionId}}"
+              ]
             },
             "response": []
           },
@@ -768,19 +1521,249 @@
           "name": "Histórico de perguntas",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/assistant/questions?page=0&size=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "assistant", "questions"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assistant",
+                "questions"
+              ],
               "query": [
-                { "key": "page", "value": "0" },
-                { "key": "size", "value": "20" }
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
               ]
             },
             "response": []
           },
           "response": []
+        }
+      ]
+    },
+    {
+      "name": "9-Usuários (JWT)",
+      "description": "Gestão de usuários (FASE 10). Edição e desativação só para o próprio usuário; auditoria sem senha.",
+      "item": [
+        {
+          "name": "Listar usuários",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Listagem ok (200)', () => pm.response.to.have.status(200));",
+                  "pm.test('Envelope de página', () => {",
+                  "  const page = pm.response.json().data;",
+                  "  pm.expect(page).to.have.property('page');",
+                  "  pm.expect(page).to.have.property('content');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Detalhar usuário",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{userId}}"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Detalhe ok (200)', () => pm.response.to.have.status(200));",
+                  "pm.test('Sem passwordHash', () => pm.expect(pm.response.text()).to.not.include('passwordHash'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Editar usuário",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{userId}}"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"marcelo.editado@test.com\",\n  \"cpf\": \"52998224725\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Edição ok (200)', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('userEmail', pm.response.json().data.email);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Editar usuário alheio (403)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/id-de-outro-usuario",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "id-de-outro-usuario"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"outro@test.com\",\n  \"cpf\": \"11144477735\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Proibido (403)', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Desativar usuário",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}/deactivate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{userId}}",
+                "deactivate"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Desativação ok (200)', () => pm.response.to.have.status(200));",
+                  "pm.test('active=false', () => pm.expect(pm.response.json().data.active).to.eql(false));"
+                ]
+              }
+            }
+          ]
         }
       ]
     }

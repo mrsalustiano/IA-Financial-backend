@@ -9,6 +9,8 @@ Na aplicação isso é executado automaticamente no boot pelo `MongoSchemaInitia
 (`config/MongoSchemaInitializer.java`) — tudo abaixo pode ser reproduzido manualmente no `mongosh`.
 
 > Banco padrão em `application.yml`: `financial_control` (host `localhost:27017`, usuário `admin`).
+> **10 coleções**: `accounts`, `incomes`, `categories`, `financial_analyses`, `monthly_closings`,
+> `financial_plans`, `assistant_messages`, `audit_logs`, `users` e `refresh_tokens` (FASE 10).
 
 ---
 
@@ -260,6 +262,75 @@ db.audit_logs.createIndex({ entityType: 1, entityId: 1 });
 db.audit_logs.createIndex({ createdAt: -1 });
 ```
 
+## 9. users (FASE 10)
+
+```javascript
+db.createCollection("users", {
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      required: ["_id", "email", "cpf", "passwordHash", "active", "deleted", "createdAt"],
+      properties: {
+        _id:          { bsonType: "string" },
+        email:        { bsonType: "string" },
+        cpf:          { bsonType: "string" },
+        passwordHash: { bsonType: "string" },
+        active:       { bsonType: "bool" },
+        deleted:      { bsonType: "bool" },
+        deletedAt:    { bsonType: ["date", "null"] },
+        createdAt:    { bsonType: "date" },
+        updatedAt:    { bsonType: ["date", "null"] }
+      }
+    }
+  },
+  validationLevel: "strict",
+  validationAction: "error"
+});
+
+db.users.createIndex({ email: 1 }, { unique: true });
+db.users.createIndex({ cpf: 1 }, { unique: true });
+db.users.createIndex({ active: 1 });
+db.users.createIndex({ deleted: 1 });
+```
+
+> `passwordHash` é BCrypt da senha. A auditoria de usuário (audit_logs) grava apenas
+> `{id, email, cpf, active}` — nunca o hash da senha.
+
+## 10. refresh_tokens (FASE 10)
+
+```javascript
+db.createCollection("refresh_tokens", {
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      required: ["_id", "userId", "tokenHash", "expiresAt", "revoked", "deleted", "createdAt"],
+      properties: {
+        _id:       { bsonType: "string" },
+        userId:    { bsonType: "string" },
+        tokenHash: { bsonType: "string" },
+        expiresAt: { bsonType: "date" },
+        revoked:   { bsonType: "bool" },
+        revokedAt: { bsonType: ["date", "null"] },
+        deleted:   { bsonType: "bool" },
+        deletedAt: { bsonType: ["date", "null"] },
+        createdAt: { bsonType: "date" },
+        updatedAt: { bsonType: ["date", "null"] }
+      }
+    }
+  },
+  validationLevel: "strict",
+  validationAction: "error"
+});
+
+db.refresh_tokens.createIndex({ tokenHash: 1 }, { unique: true });
+db.refresh_tokens.createIndex({ userId: 1, createdAt: -1 });
+// TTL: o MongoDB remove o documento assim que expiresAt passa
+db.refresh_tokens.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+```
+
+> `tokenHash` é o SHA-256 do refresh token (o token em claro nunca é persistido). A rotação
+> revoga o antigo (`revoked=true, revokedAt=now`) e grava um novo documento a cada refresh.
+
 ---
 
 ## Verificação do DDL aplicado
@@ -278,4 +349,6 @@ db.monthly_closings.getIndexes();
 db.financial_plans.getIndexes();
 db.assistant_messages.getIndexes();
 db.audit_logs.getIndexes();
+db.users.getIndexes();
+db.refresh_tokens.getIndexes();
 ```
