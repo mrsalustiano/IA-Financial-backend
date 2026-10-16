@@ -1,0 +1,7 @@
+target/
+.tools/
+*.log
+.idea/
+*.iml
+.vscode/
+.flapdoodle/
