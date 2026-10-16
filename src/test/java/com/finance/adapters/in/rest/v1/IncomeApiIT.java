@@ -214,6 +214,21 @@ class IncomeApiIT extends AbstractApiIT {
     }
 
     @Test
+    void listIncomesSortedByReceivedAtAscendingWhenRequested() throws Exception {
+        String accountId = createAccount("Sort account", AccountType.DINHEIRO);
+        createIncome(accountId, "Older income", 10, "2026-09-01");
+        createIncome(accountId, "Newer income", 20, "2026-10-01");
+
+        mockMvc.perform(get("/api/v1/incomes")
+                .param("accountId", accountId)
+                .param("sort", "receivedAt,asc"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.totalElements").value(2))
+            .andExpect(jsonPath("$.data.content[0].description").value("Older income"))
+            .andExpect(jsonPath("$.data.content[1].description").value("Newer income"));
+    }
+
+    @Test
     void createIncomeWritesAuditLog() throws Exception {
         String accountId = createAccount("Audit income", AccountType.DINHEIRO);
         String incomeId = createIncome(accountId, "Audited income", 42, "2026-10-10");

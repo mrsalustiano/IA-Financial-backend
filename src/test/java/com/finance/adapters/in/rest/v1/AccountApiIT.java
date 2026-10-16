@@ -128,6 +128,39 @@ class AccountApiIT extends AbstractApiIT {
     }
 
     @Test
+    void listAccountsFiltersByActiveFlag() throws Exception {
+        createAccount("Active one", AccountType.CONTA_CORRENTE);
+        String inactive = createAccount("Inactive one", AccountType.POUPANCA);
+        mockMvc.perform(put("/api/v1/accounts/{id}", inactive)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"name":"Inactive one","description":"","type":"POUPANCA","active":false}
+                    """))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/accounts").param("active", "true"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.totalElements").value(1))
+            .andExpect(jsonPath("$.data.content[0].name").value("Active one"));
+
+        mockMvc.perform(get("/api/v1/accounts").param("active", "false"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.totalElements").value(1))
+            .andExpect(jsonPath("$.data.content[0].name").value("Inactive one"));
+    }
+
+    @Test
+    void listAccountsSortsByNameDescWhenRequested() throws Exception {
+        createAccount("Alpha", AccountType.DINHEIRO);
+        createAccount("Beta", AccountType.DINHEIRO);
+        mockMvc.perform(get("/api/v1/accounts").param("sort", "name,desc"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.totalElements").value(2))
+            .andExpect(jsonPath("$.data.content[0].name").value("Beta"))
+            .andExpect(jsonPath("$.data.content[1].name").value("Alpha"));
+    }
+
+    @Test
     void updateAccountRefreshesUpdatedAtAndKeepsCreatedAt() throws Exception {
         String id = createAccount("Stamped", AccountType.CONTA_CORRENTE);
         Document before = mongoTemplate.findById(id, Document.class, "accounts");
