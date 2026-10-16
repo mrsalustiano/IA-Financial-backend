@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback - IA-Financial
+  - Cores: ERROR=vermelho, WARN=amarelo, INFO=verde, DEBUG=azul
+  - Niveis por camada: Mongo=WARN, Aplicacao=INFO (DEBUG em dev), Ollama/IA=DEBUG em dev
+  - Ative o perfil "dev" (spring.profiles.active=dev) para logs coloridos verbosos.
+-->
+<configuration>
+
+    <property name="PATTERN_COLOR"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level){FATAL=red, ERROR=red, WARN=yellow, INFO=green, DEBUG=blue, TRACE=blue} %boldMagenta([%thread]) %boldCyan(%logger{40}) : %msg%n%ex{short}"/>
+    <property name="PATTERN_PLAIN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{40} : %msg%n%ex{short}"/>
+
+    <!-- ===== Console (colorido por padrao; com perfil dev sempre colorido) ===== -->
+    <springProfile name="dev">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder><pattern>${PATTERN_COLOR}</pattern><charset>UTF-8</charset></encoder>
+        </appender>
+    </springProfile>
+    <springProfile name="!dev">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <withConsumeLeftoverBuffer>true</withConsumeLeftoverBuffer>
+            <encoder><pattern>${PATTERN_COLOR}</pattern><charset>UTF-8</charset></encoder>
+        </appender>
+    </springProfile>
+
+    <!-- ===== Arquivo rolling (texto puro, 14 dias) ===== -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/ia-financial.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>logs/ia-financial.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>20MB</maxFileSize>
+            <maxHistory>14</maxHistory>
+            <totalSizeCap>500MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder><pattern>${PATTERN_PLAIN}</pattern><charset>UTF-8</charset></encoder>
+    </appender>
+
+    <!-- ===== Niveis por camada ===== -->
+    <!-- Aplicacao (use cases, dominio, controllers) -->
+    <logger name="com.finance" level="INFO"/>
+    <springProfile name="dev">
+        <logger name="com.finance" level="DEBUG"/>
+        <!-- Ollama / integracao com IA: em dev mostra prompts e respostas completas -->
+        <logger name="com.finance.adapters.out.ai" level="DEBUG"/>
+        <logger name="org.springframework.web.client.RestTemplate" level="DEBUG"/>
+    </springProfile>
+    <logger name="com.finance.adapters.out.ai" level="INFO"/>
+
+    <!-- Mongo driver e Spring Data: so avisos (evita poluicao de queries no console) -->
+    <logger name="org.mongodb.driver" level="WARN"/>
+    <logger name="org.springframework.data.mongodb" level="WARN"/>
+    <logger name="org.springframework.boot.autoconfigure.mongo" level="WARN"/>
+
+    <!-- Seguranca: avisos de filtros JWT -->
+    <logger name="org.springframework.security" level="WARN"/>
+
+    <!-- Scheduler/agendamento -->
+    <logger name="org.springframework.scheduling" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </root>
+
+</configuration>

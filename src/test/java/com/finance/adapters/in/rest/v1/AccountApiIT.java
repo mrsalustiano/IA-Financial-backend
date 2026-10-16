@@ -33,13 +33,14 @@ class AccountApiIT extends AbstractApiIT {
 
     @BeforeEach
     void cleanCollections() {
+        registerAndLogin();
         mongoTemplate.getDb().getCollection("accounts").deleteMany(new Document());
         mongoTemplate.getDb().getCollection("audit_logs").deleteMany(new Document());
     }
 
     @Test
     void createAccountReturns201AndEnvelope() throws Exception {
-        mockMvc.perform(post("/api/v1/accounts")
+        api(post("/api/v1/accounts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"Main Checking","description":"Everyday account","type":"CONTA_CORRENTE"}
@@ -50,7 +51,7 @@ class AccountApiIT extends AbstractApiIT {
             .andExpect(jsonPath("$.data.name").value("Main Checking"))
             .andExpect(jsonPath("$.data.type").value("CONTA_CORRENTE"))
             .andExpect(jsonPath("$.data.active").value(true))
-            .andExpect(jsonPath("$.data.userId").value("LOCAL_USER"))
+            .andExpect(jsonPath("$.data.userId").value(currentUserId))
             .andExpect(jsonPath("$.data.id").isNotEmpty())
             .andExpect(jsonPath("$.data.createdAt").isNotEmpty())
             .andExpect(jsonPath("$.data.updatedAt").isNotEmpty());
@@ -58,7 +59,7 @@ class AccountApiIT extends AbstractApiIT {
 
     @Test
     void createAccountWithoutNameReturns400() throws Exception {
-        mockMvc.perform(post("/api/v1/accounts")
+        api(post("/api/v1/accounts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"  ","type":"DINHEIRO"}
@@ -73,7 +74,7 @@ class AccountApiIT extends AbstractApiIT {
 
     @Test
     void createAccountWithUnknownTypeReturns400() throws Exception {
-        mockMvc.perform(post("/api/v1/accounts")
+        api(post("/api/v1/accounts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"Wallet","type":"NOT_A_TYPE"}
@@ -85,7 +86,7 @@ class AccountApiIT extends AbstractApiIT {
     @Test
     void createAccountWithDuplicatedNameReturns409() throws Exception {
         createAccount("Investment Broker", AccountType.INVESTIMENTO);
-        mockMvc.perform(post("/api/v1/accounts")
+        api(post("/api/v1/accounts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"investment broker","type":"INVESTIMENTO"}
@@ -98,7 +99,7 @@ class AccountApiIT extends AbstractApiIT {
     @Test
     void getAccountByIdReturnsAccount() throws Exception {
         String id = createAccount("Savings", AccountType.POUPANCA);
-        mockMvc.perform(get("/api/v1/accounts/{id}", id))
+        api(get("/api/v1/accounts/{id}", id))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.id").value(id))
             .andExpect(jsonPath("$.data.name").value("Savings"));
@@ -106,7 +107,7 @@ class AccountApiIT extends AbstractApiIT {
 
     @Test
     void getUnknownAccountReturns404() throws Exception {
-        mockMvc.perform(get("/api/v1/accounts/{id}", UUID.randomUUID().toString()))
+        api(get("/api/v1/accounts/{id}", UUID.randomUUID().toString()))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.error").value("NOT_FOUND"))
             .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith("Conta não encontrada")));
@@ -115,7 +116,7 @@ class AccountApiIT extends AbstractApiIT {
     @Test
     void updateAccountChangesFields() throws Exception {
         String id = createAccount("Old Name", AccountType.CONTA_CORRENTE);
-        mockMvc.perform(put("/api/v1/accounts/{id}", id)
+        api(put("/api/v1/accounts/{id}", id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"New Name","description":"updated","type":"POUPANCA","active":false}
@@ -131,19 +132,19 @@ class AccountApiIT extends AbstractApiIT {
     void listAccountsFiltersByActiveFlag() throws Exception {
         createAccount("Active one", AccountType.CONTA_CORRENTE);
         String inactive = createAccount("Inactive one", AccountType.POUPANCA);
-        mockMvc.perform(put("/api/v1/accounts/{id}", inactive)
+        api(put("/api/v1/accounts/{id}", inactive)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"Inactive one","description":"","type":"POUPANCA","active":false}
                     """))
             .andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/v1/accounts").param("active", "true"))
+        api(get("/api/v1/accounts").param("active", "true"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.totalElements").value(1))
             .andExpect(jsonPath("$.data.content[0].name").value("Active one"));
 
-        mockMvc.perform(get("/api/v1/accounts").param("active", "false"))
+        api(get("/api/v1/accounts").param("active", "false"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.totalElements").value(1))
             .andExpect(jsonPath("$.data.content[0].name").value("Inactive one"));
@@ -153,7 +154,7 @@ class AccountApiIT extends AbstractApiIT {
     void listAccountsSortsByNameDescWhenRequested() throws Exception {
         createAccount("Alpha", AccountType.DINHEIRO);
         createAccount("Beta", AccountType.DINHEIRO);
-        mockMvc.perform(get("/api/v1/accounts").param("sort", "name,desc"))
+        api(get("/api/v1/accounts").param("sort", "name,desc"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.totalElements").value(2))
             .andExpect(jsonPath("$.data.content[0].name").value("Beta"))
@@ -165,7 +166,7 @@ class AccountApiIT extends AbstractApiIT {
         String id = createAccount("Stamped", AccountType.CONTA_CORRENTE);
         Document before = mongoTemplate.findById(id, Document.class, "accounts");
         Thread.sleep(5);
-        mockMvc.perform(put("/api/v1/accounts/{id}", id)
+        api(put("/api/v1/accounts/{id}", id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"Stamped again","description":"","type":"CONTA_CORRENTE","active":true}
@@ -180,7 +181,7 @@ class AccountApiIT extends AbstractApiIT {
     void updateAccountToExistingNameReturns409() throws Exception {
         createAccount("First", AccountType.DINHEIRO);
         String second = createAccount("Second", AccountType.DINHEIRO);
-        mockMvc.perform(put("/api/v1/accounts/{id}", second)
+        api(put("/api/v1/accounts/{id}", second)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"First","description":"","type":"DINHEIRO","active":true}
@@ -191,9 +192,9 @@ class AccountApiIT extends AbstractApiIT {
     @Test
     void deleteAccountSoftDeletesAndHidesFromRead() throws Exception {
         String id = createAccount("To Delete", AccountType.CONTA_CORRENTE);
-        mockMvc.perform(delete("/api/v1/accounts/{id}", id))
+        api(delete("/api/v1/accounts/{id}", id))
             .andExpect(status().isNoContent());
-        mockMvc.perform(get("/api/v1/accounts/{id}", id))
+        api(get("/api/v1/accounts/{id}", id))
             .andExpect(status().isNotFound());
         Document stored = mongoTemplate.findById(id, Document.class, "accounts");
         assertThat(stored).isNotNull();
@@ -203,7 +204,7 @@ class AccountApiIT extends AbstractApiIT {
 
     @Test
     void deleteUnknownAccountReturns404() throws Exception {
-        mockMvc.perform(delete("/api/v1/accounts/{id}", UUID.randomUUID().toString()))
+        api(delete("/api/v1/accounts/{id}", UUID.randomUUID().toString()))
             .andExpect(status().isNotFound());
     }
 
@@ -213,7 +214,7 @@ class AccountApiIT extends AbstractApiIT {
         createAccount("Checking 2", AccountType.CONTA_CORRENTE);
         createAccount("Savings 1", AccountType.POUPANCA);
 
-        mockMvc.perform(get("/api/v1/accounts")
+        api(get("/api/v1/accounts")
                 .param("type", "CONTA_CORRENTE")
                 .param("size", "1")
                 .param("page", "0")
@@ -227,11 +228,11 @@ class AccountApiIT extends AbstractApiIT {
             .andExpect(jsonPath("$.data.totalPages").value(2))
             .andExpect(jsonPath("$.data.content[0].name").value("Checking 1"));
 
-        mockMvc.perform(get("/api/v1/accounts").param("active", "true"))
+        api(get("/api/v1/accounts").param("active", "true"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.totalElements").value(3));
 
-        mockMvc.perform(get("/api/v1/accounts").param("type", "CARTAO_CREDITO"))
+        api(get("/api/v1/accounts").param("type", "CARTAO_CREDITO"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.totalElements").value(0));
     }
@@ -253,7 +254,7 @@ class AccountApiIT extends AbstractApiIT {
     @Test
     void updateAccountWritesAuditLogWithOldAndNewValues() throws Exception {
         String id = createAccount("Before", AccountType.DINHEIRO);
-        mockMvc.perform(put("/api/v1/accounts/{id}", id)
+        api(put("/api/v1/accounts/{id}", id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"After","description":"","type":"DINHEIRO","active":true}
@@ -269,7 +270,7 @@ class AccountApiIT extends AbstractApiIT {
     @Test
     void deleteAccountWritesAuditLogWithOldValue() throws Exception {
         String id = createAccount("Doomed", AccountType.CONTA_CORRENTE);
-        mockMvc.perform(delete("/api/v1/accounts/{id}", id))
+        api(delete("/api/v1/accounts/{id}", id))
             .andExpect(status().isNoContent());
         List<Document> auditLogs = mongoTemplate.getDb().getCollection("audit_logs")
             .find(new Document("action", "EXCLUSAO")).into(new java.util.ArrayList<>());
@@ -280,7 +281,7 @@ class AccountApiIT extends AbstractApiIT {
 
     @Test
     void malformedBodyReturns400() throws Exception {
-        mockMvc.perform(post("/api/v1/accounts")
+        api(post("/api/v1/accounts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("not-json"))
             .andExpect(status().isBadRequest())
@@ -289,18 +290,24 @@ class AccountApiIT extends AbstractApiIT {
 
     @Test
     void unknownRouteReturns404() throws Exception {
-        mockMvc.perform(get("/api/v1/does-not-exist"))
+        api(get("/api/v1/does-not-exist"))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.message").value("Recurso não encontrado"));
     }
 
     private String createAccount(String name, AccountType type) throws Exception {
         Map<String, Object> body = Map.of("name", name, "type", type.name());
-        String response = mockMvc.perform(post("/api/v1/accounts")
+        String response = api(post("/api/v1/accounts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(body)))
             .andExpect(status().isCreated())
             .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(response).path("data").path("id").asText();
+    }
+
+    private org.springframework.test.web.servlet.ResultActions api(
+        org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder builder)
+        throws Exception {
+        return mockMvc.perform(auth(builder));
     }
 }

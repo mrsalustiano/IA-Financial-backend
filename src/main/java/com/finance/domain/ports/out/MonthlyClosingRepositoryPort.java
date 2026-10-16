@@ -2,15 +2,16 @@ package com.finance.domain.ports.out;
 
 import com.finance.domain.model.MonthlyClosing;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface MonthlyClosingRepositoryPort {
 
     MonthlyClosing save(MonthlyClosing closing);
 
-    Optional<MonthlyClosing> findById(String id);
+    Optional<MonthlyClosing> findByIdAndUser(String userId, String id);
 
-    Optional<MonthlyClosing> findByReferenceMonth(String referenceMonth);
+    Optional<MonthlyClosing> findByUserAndReferenceMonth(String userId, String referenceMonth);
 
-    java.util.List<MonthlyClosing> findAll();
+    List<MonthlyClosing> findAllByUser(String userId);
 }

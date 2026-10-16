@@ -28,9 +28,12 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
+import com.finance.domain.ports.out.CurrentUserPort;
 
 @Service
 public class GenerateFinancialAnalysisUseCaseImpl implements GenerateFinancialAnalysisUseCase {
+
+    private final CurrentUserPort currentUserPort;
 
     private static final Logger log = LoggerFactory.getLogger(GenerateFinancialAnalysisUseCaseImpl.class);
 
@@ -47,7 +50,9 @@ public class GenerateFinancialAnalysisUseCaseImpl implements GenerateFinancialAn
                                                 FinancialAnalysisRepositoryPort analysisRepositoryPort,
                                                 AiProviderPort aiProviderPort,
                                                 FinancialAnalysisDomainService analysisDomainService,
-                                                AuditPort auditPort, EventPublisherPort eventPublisherPort) {
+                                                AuditPort auditPort, EventPublisherPort eventPublisherPort,
+                                   CurrentUserPort currentUserPort) {
+        this.currentUserPort = currentUserPort;
         this.accountRepositoryPort = accountRepositoryPort;
         this.incomeRepositoryPort = incomeRepositoryPort;
         this.analysisRepositoryPort = analysisRepositoryPort;
@@ -65,7 +70,8 @@ public class GenerateFinancialAnalysisUseCaseImpl implements GenerateFinancialAn
             .search(new AccountSearchQuery(null, true, PageRequest.of(0, 500, Sort.unsorted())))
             .content().size();
         PageResult<com.finance.domain.model.Income> incomes = incomeRepositoryPort
-            .search(new IncomeSearchQuery(null, null, null, PageRequest.of(0, 500, Sort.unsorted())));
+            .search(new IncomeSearchQuery(currentUserPort.requireUserId(), null, null, null,
+                PageRequest.of(0, 500, Sort.unsorted())));
 
         if (incomes.content().isEmpty()) {
             throw new ValidationException("Não há receitas suficientes para gerar uma análise");
@@ -84,7 +90,7 @@ public class GenerateFinancialAnalysisUseCaseImpl implements GenerateFinancialAn
             analysisDomainService.countMonthsCovered(incomes.content().stream()
                 .map(com.finance.domain.model.Income::getReceivedAt).toList()));
 
-        FinancialAnalysis analysis = FinancialAnalysis.create(Identifiers.newId(), AppConstants.LOCAL_USER_ID,
+        FinancialAnalysis analysis = FinancialAnalysis.create(Identifiers.newId(), currentUserPort.requireUserId(),
             prompt, aiResponse.content(), score, recommendations, aiResponse.provider(), aiResponse.model(), now);
         FinancialAnalysis saved = analysisRepositoryPort.save(analysis);
         auditPort.record(AppConstants.ENTITY_FINANCIAL_ANALYSIS, saved.getId(), AuditAction.CRIACAO, null, saved);

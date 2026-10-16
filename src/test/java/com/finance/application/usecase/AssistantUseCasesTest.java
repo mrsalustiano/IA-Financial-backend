@@ -20,6 +20,7 @@ import com.finance.domain.services.FinancialAnalysisDomainService;
 import com.finance.domain.services.FinancialPlanningDomainService;
 import com.finance.shared.exception.ExternalServiceException;
 import com.finance.shared.exception.NotFoundException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -42,6 +43,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.finance.domain.ports.out.CurrentUserPort;
 
 @ExtendWith(MockitoExtension.class)
 class AssistantUseCasesTest {
@@ -72,6 +74,15 @@ class AssistantUseCasesTest {
 
     @InjectMocks
     private AskAssistantUseCaseImpl askUseCase;
+
+    @Mock
+    private CurrentUserPort currentUserPort;
+
+    @BeforeEach
+    void stubCurrentUser() {
+        org.mockito.Mockito.lenient().when(currentUserPort.requireUserId())
+            .thenReturn(com.finance.shared.constants.AppConstants.LOCAL_USER_ID);
+    }
 
     @Test
     void answersQuestionUsingFinancialContextAndPersistsHistory() {

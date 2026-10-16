@@ -62,6 +62,15 @@ public class MongoSchemaInitializer implements ApplicationRunner {
             ensureCollection("audit_logs", null,
                 List.of(new Index().on("entityType", Sort.Direction.ASC).on("entityId", Sort.Direction.ASC),
                     new Index().on("createdAt", Sort.Direction.DESC)));
+            ensureCollection("users", USER_VALIDATOR,
+                List.of(new Index().on("email", Sort.Direction.ASC).unique(),
+                    new Index().on("cpf", Sort.Direction.ASC).unique(),
+                    new Index().on("active", Sort.Direction.ASC),
+                    new Index().on("deleted", Sort.Direction.ASC)));
+            ensureCollection("refresh_tokens", REFRESH_TOKEN_VALIDATOR,
+                List.of(new Index().on("tokenHash", Sort.Direction.ASC).unique(),
+                    new Index().on("userId", Sort.Direction.ASC).on("createdAt", Sort.Direction.DESC),
+                    new Index().on("expiresAt", Sort.Direction.ASC).expire(0L)));
         } catch (RuntimeException ex) {
             throw new DatabaseException("Falha ao inicializar o schema do MongoDB", ex);
         }
@@ -214,6 +223,47 @@ public class MongoSchemaInitializer implements ApplicationRunner {
               "answer": {"bsonType": "string"},
               "provider": {"bsonType": ["string", "null"]},
               "model": {"bsonType": ["string", "null"]},
+              "deleted": {"bsonType": "bool"},
+              "deletedAt": {"bsonType": ["date", "null"]},
+              "createdAt": {"bsonType": "date"},
+              "updatedAt": {"bsonType": ["date", "null"]}
+            }
+          }
+        }
+        """;
+
+    private static final String USER_VALIDATOR = """
+        {
+          "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["_id", "email", "cpf", "passwordHash", "active", "deleted", "createdAt"],
+            "properties": {
+              "_id": {"bsonType": "string"},
+              "email": {"bsonType": "string"},
+              "cpf": {"bsonType": "string"},
+              "passwordHash": {"bsonType": "string"},
+              "active": {"bsonType": "bool"},
+              "deleted": {"bsonType": "bool"},
+              "deletedAt": {"bsonType": ["date", "null"]},
+              "createdAt": {"bsonType": "date"},
+              "updatedAt": {"bsonType": ["date", "null"]}
+            }
+          }
+        }
+        """;
+
+    private static final String REFRESH_TOKEN_VALIDATOR = """
+        {
+          "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["_id", "userId", "tokenHash", "expiresAt", "revoked", "deleted", "createdAt"],
+            "properties": {
+              "_id": {"bsonType": "string"},
+              "userId": {"bsonType": "string"},
+              "tokenHash": {"bsonType": "string"},
+              "expiresAt": {"bsonType": "date"},
+              "revoked": {"bsonType": "bool"},
+              "revokedAt": {"bsonType": ["date", "null"]},
               "deleted": {"bsonType": "bool"},
               "deletedAt": {"bsonType": ["date", "null"]},
               "createdAt": {"bsonType": "date"},

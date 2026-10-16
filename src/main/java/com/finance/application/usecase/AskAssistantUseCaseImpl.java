@@ -26,9 +26,12 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import com.finance.domain.ports.out.CurrentUserPort;
 
 @Service
 public class AskAssistantUseCaseImpl implements AskAssistantUseCase {
+
+    private final CurrentUserPort currentUserPort;
 
     private static final Logger log = LoggerFactory.getLogger(AskAssistantUseCaseImpl.class);
 
@@ -47,7 +50,9 @@ public class AskAssistantUseCaseImpl implements AskAssistantUseCase {
                                    AiProviderPort aiProviderPort,
                                    FinancialAnalysisDomainService analysisDomainService,
                                    FinancialPlanningDomainService planningDomainService, AuditPort auditPort,
-                                   EventPublisherPort eventPublisherPort) {
+                                   EventPublisherPort eventPublisherPort,
+                                   CurrentUserPort currentUserPort) {
+        this.currentUserPort = currentUserPort;
         this.accountRepositoryPort = accountRepositoryPort;
         this.incomeRepositoryPort = incomeRepositoryPort;
         this.messageRepositoryPort = messageRepositoryPort;
@@ -66,7 +71,8 @@ public class AskAssistantUseCaseImpl implements AskAssistantUseCase {
             .search(new AccountSearchQuery(null, true, PageRequest.of(0, 500, Sort.unsorted())))
             .content().size();
         PageResult<Income> incomes = incomeRepositoryPort
-            .search(new IncomeSearchQuery(null, null, null, PageRequest.of(0, 500, Sort.unsorted())));
+            .search(new IncomeSearchQuery(currentUserPort.requireUserId(), null, null, null,
+                PageRequest.of(0, 500, Sort.unsorted())));
         long monthsCovered = analysisDomainService.countMonthsCovered(incomes.content().stream()
             .map(Income::getReceivedAt).toList());
         java.math.BigDecimal totalIncome = analysisDomainService.totalIncome(incomes.content().stream()
@@ -75,7 +81,7 @@ public class AskAssistantUseCaseImpl implements AskAssistantUseCase {
             incomes.content().size(), totalIncome, monthsCovered);
         com.finance.domain.model.AiResponse aiResponse = aiProviderPort
             .complete(new com.finance.domain.model.AiPrompt(prompt, java.util.Map.of()));
-        AssistantMessage message = AssistantMessage.create(Identifiers.newId(), AppConstants.LOCAL_USER_ID,
+        AssistantMessage message = AssistantMessage.create(Identifiers.newId(), currentUserPort.requireUserId(),
             command.question(), aiResponse.content(), aiResponse.provider(), aiResponse.model(), now);
         AssistantMessage saved = messageRepositoryPort.save(message);
         auditPort.record(AppConstants.ENTITY_ASSISTANT_MESSAGE, saved.getId(), AuditAction.CRIACAO, null, saved);

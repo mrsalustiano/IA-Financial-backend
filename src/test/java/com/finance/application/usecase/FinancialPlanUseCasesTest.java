@@ -21,6 +21,7 @@ import com.finance.domain.services.FinancialPlanningDomainService;
 import com.finance.shared.exception.ExternalServiceException;
 import com.finance.shared.exception.NotFoundException;
 import com.finance.shared.exception.ValidationException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -43,6 +44,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.finance.domain.ports.out.CurrentUserPort;
 
 @ExtendWith(MockitoExtension.class)
 class FinancialPlanUseCasesTest {
@@ -84,6 +86,15 @@ class FinancialPlanUseCasesTest {
                 new BigDecimal("3000"), LocalDate.of(2026, 9, 5), Instant.now())), 0, 500, 1, 1));
         org.mockito.Mockito.lenient().when(planRepositoryPort.save(any()))
             .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @Mock
+    private CurrentUserPort currentUserPort;
+
+    @BeforeEach
+    void stubCurrentUser() {
+        org.mockito.Mockito.lenient().when(currentUserPort.requireUserId())
+            .thenReturn(com.finance.shared.constants.AppConstants.LOCAL_USER_ID);
     }
 
     @Test

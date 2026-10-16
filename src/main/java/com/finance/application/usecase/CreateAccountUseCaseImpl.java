@@ -16,9 +16,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import com.finance.domain.ports.out.CurrentUserPort;
 
 @Service
 public class CreateAccountUseCaseImpl implements CreateAccountUseCase {
+
+    private final CurrentUserPort currentUserPort;
 
     private static final Logger log = LoggerFactory.getLogger(CreateAccountUseCaseImpl.class);
 
@@ -28,7 +31,9 @@ public class CreateAccountUseCaseImpl implements CreateAccountUseCase {
     private final EventPublisherPort eventPublisherPort;
 
     public CreateAccountUseCaseImpl(AccountRepositoryPort accountRepositoryPort, AccountValidator accountValidator,
-                                    AuditPort auditPort, EventPublisherPort eventPublisherPort) {
+                                    AuditPort auditPort, EventPublisherPort eventPublisherPort,
+                                   CurrentUserPort currentUserPort) {
+        this.currentUserPort = currentUserPort;
         this.accountRepositoryPort = accountRepositoryPort;
         this.accountValidator = accountValidator;
         this.auditPort = auditPort;
@@ -41,7 +46,7 @@ public class CreateAccountUseCaseImpl implements CreateAccountUseCase {
         Instant now = Instant.now();
         accountValidator.ensureNameAvailable(command.name(), null);
         boolean active = command.active() == null || command.active();
-        Account account = Account.create(Identifiers.newId(), AppConstants.LOCAL_USER_ID, command.name(),
+        Account account = Account.create(Identifiers.newId(), currentUserPort.requireUserId(), command.name(),
             command.description(), command.type(), active, now);
         Account saved = accountRepositoryPort.save(account);
         auditPort.record(AppConstants.ENTITY_ACCOUNT, saved.getId(), AuditAction.CRIACAO, null, saved);

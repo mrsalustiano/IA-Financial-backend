@@ -37,6 +37,7 @@ class IncomeApiIT extends AbstractApiIT {
 
     @BeforeEach
     void cleanCollections() {
+        registerAndLogin();
         mongoTemplate.getDb().getCollection("accounts").deleteMany(new Document());
         mongoTemplate.getDb().getCollection("incomes").deleteMany(new Document());
         mongoTemplate.getDb().getCollection("audit_logs").deleteMany(new Document());
@@ -45,7 +46,7 @@ class IncomeApiIT extends AbstractApiIT {
     @Test
     void createIncomeWithValidAccountReturns201() throws Exception {
         String accountId = createAccount("Salary Account", AccountType.CONTA_CORRENTE);
-        mockMvc.perform(post("/api/v1/incomes")
+        api(post("/api/v1/incomes")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                     "accountId", accountId,
@@ -58,14 +59,14 @@ class IncomeApiIT extends AbstractApiIT {
             .andExpect(jsonPath("$.data.amount").value(5000.75))
             .andExpect(jsonPath("$.data.accountId").value(accountId))
             .andExpect(jsonPath("$.data.receivedAt").value("2026-10-05"))
-            .andExpect(jsonPath("$.data.userId").value("LOCAL_USER"))
+            .andExpect(jsonPath("$.data.userId").value(currentUserId))
             .andExpect(jsonPath("$.data.id").isNotEmpty());
     }
 
     @Test
     void createIncomeWithZeroAmountReturns400() throws Exception {
         String accountId = createAccount("Zero", AccountType.CONTA_CORRENTE);
-        mockMvc.perform(post("/api/v1/incomes")
+        api(post("/api/v1/incomes")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                     "accountId", accountId,
@@ -79,7 +80,7 @@ class IncomeApiIT extends AbstractApiIT {
     @Test
     void createIncomeWithNegativeAmountReturns400() throws Exception {
         String accountId = createAccount("Negative", AccountType.CONTA_CORRENTE);
-        mockMvc.perform(post("/api/v1/incomes")
+        api(post("/api/v1/incomes")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                     "accountId", accountId,
@@ -91,7 +92,7 @@ class IncomeApiIT extends AbstractApiIT {
 
     @Test
     void createIncomeWithUnknownAccountReturns404() throws Exception {
-        mockMvc.perform(post("/api/v1/incomes")
+        api(post("/api/v1/incomes")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                     "accountId", UUID.randomUUID().toString(),
@@ -106,7 +107,7 @@ class IncomeApiIT extends AbstractApiIT {
     void createIncomeOnInactiveAccountReturns422() throws Exception {
         String accountId = createAccount("Inactive Account", AccountType.CONTA_CORRENTE);
         deactivateAccount(accountId);
-        mockMvc.perform(post("/api/v1/incomes")
+        api(post("/api/v1/incomes")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                     "accountId", accountId,
@@ -121,7 +122,7 @@ class IncomeApiIT extends AbstractApiIT {
     @Test
     void createIncomeWithFutureDateReturns400() throws Exception {
         String accountId = createAccount("Future", AccountType.CONTA_CORRENTE);
-        mockMvc.perform(post("/api/v1/incomes")
+        api(post("/api/v1/incomes")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                     "accountId", accountId,
@@ -138,7 +139,7 @@ class IncomeApiIT extends AbstractApiIT {
         String accountB = createAccount("Account B", AccountType.CONTA_CORRENTE);
         String incomeId = createIncome(accountA, "Bonus", 1200.50, "2026-09-30");
 
-        mockMvc.perform(put("/api/v1/incomes/{id}", incomeId)
+        api(put("/api/v1/incomes/{id}", incomeId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                     "accountId", accountB,
@@ -156,7 +157,7 @@ class IncomeApiIT extends AbstractApiIT {
     void updateIncomeWithZeroAmountReturns400() throws Exception {
         String accountId = createAccount("Account Z", AccountType.DINHEIRO);
         String incomeId = createIncome(accountId, "Old", 10, "2026-09-30");
-        mockMvc.perform(put("/api/v1/incomes/{id}", incomeId)
+        api(put("/api/v1/incomes/{id}", incomeId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                     "accountId", accountId,
@@ -170,9 +171,9 @@ class IncomeApiIT extends AbstractApiIT {
     void deleteIncomeSoftDeletes() throws Exception {
         String accountId = createAccount("Account D", AccountType.DINHEIRO);
         String incomeId = createIncome(accountId, "To delete", 99.90, "2026-09-30");
-        mockMvc.perform(delete("/api/v1/incomes/{id}", incomeId))
+        api(delete("/api/v1/incomes/{id}", incomeId))
             .andExpect(status().isNoContent());
-        mockMvc.perform(get("/api/v1/incomes/{id}", incomeId))
+        api(get("/api/v1/incomes/{id}", incomeId))
             .andExpect(status().isNotFound());
         Document stored = mongoTemplate.findById(incomeId, Document.class, "incomes");
         assertThat(stored).isNotNull();
@@ -181,7 +182,7 @@ class IncomeApiIT extends AbstractApiIT {
 
     @Test
     void getUnknownIncomeReturns404() throws Exception {
-        mockMvc.perform(get("/api/v1/incomes/{id}", UUID.randomUUID().toString()))
+        api(get("/api/v1/incomes/{id}", UUID.randomUUID().toString()))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith("Receita não encontrada")));
     }
@@ -194,7 +195,7 @@ class IncomeApiIT extends AbstractApiIT {
         createIncome(accountA, "October salary", 3000, "2026-10-05");
         createIncome(accountB, "Other account", 500, "2026-09-10");
 
-        mockMvc.perform(get("/api/v1/incomes")
+        api(get("/api/v1/incomes")
                 .param("accountId", accountA)
                 .param("startDate", "2026-09-01")
                 .param("endDate", "2026-09-30"))
@@ -202,11 +203,11 @@ class IncomeApiIT extends AbstractApiIT {
             .andExpect(jsonPath("$.data.totalElements").value(1))
             .andExpect(jsonPath("$.data.content[0].description").value("September salary"));
 
-        mockMvc.perform(get("/api/v1/incomes"))
+        api(get("/api/v1/incomes"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.totalElements").value(3));
 
-        mockMvc.perform(get("/api/v1/incomes").param("size", "2").param("page", "1"))
+        api(get("/api/v1/incomes").param("size", "2").param("page", "1"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.content.length()").value(1))
             .andExpect(jsonPath("$.data.page").value(1))
@@ -219,7 +220,7 @@ class IncomeApiIT extends AbstractApiIT {
         createIncome(accountId, "Older income", 10, "2026-09-01");
         createIncome(accountId, "Newer income", 20, "2026-10-01");
 
-        mockMvc.perform(get("/api/v1/incomes")
+        api(get("/api/v1/incomes")
                 .param("accountId", accountId)
                 .param("sort", "receivedAt,asc"))
             .andExpect(status().isOk())
@@ -244,7 +245,7 @@ class IncomeApiIT extends AbstractApiIT {
     void updateIncomeWritesAuditLogWithOldAndNewValues() throws Exception {
         String accountId = createAccount("Audit update", AccountType.DINHEIRO);
         String incomeId = createIncome(accountId, "Before income", 10, "2026-09-30");
-        mockMvc.perform(put("/api/v1/incomes/{id}", incomeId)
+        api(put("/api/v1/incomes/{id}", incomeId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                     "accountId", accountId,
@@ -267,7 +268,7 @@ class IncomeApiIT extends AbstractApiIT {
         String incomeId = createIncome(accountId, "Stamped", 10, "2026-09-30");
         Document before = mongoTemplate.findById(incomeId, Document.class, "incomes");
         Thread.sleep(5);
-        mockMvc.perform(put("/api/v1/incomes/{id}", incomeId)
+        api(put("/api/v1/incomes/{id}", incomeId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                     "accountId", accountId,
@@ -284,7 +285,7 @@ class IncomeApiIT extends AbstractApiIT {
     void deleteIncomeWritesAuditLogWithOldValue() throws Exception {
         String accountId = createAccount("Audit delete income", AccountType.DINHEIRO);
         String incomeId = createIncome(accountId, "Doomed income", 5, "2026-09-30");
-        mockMvc.perform(delete("/api/v1/incomes/{id}", incomeId))
+        api(delete("/api/v1/incomes/{id}", incomeId))
             .andExpect(status().isNoContent());
         List<Document> auditLogs = mongoTemplate.getDb().getCollection("audit_logs")
             .find(new Document("entityType", "Income").append("action", "EXCLUSAO"))
@@ -295,7 +296,7 @@ class IncomeApiIT extends AbstractApiIT {
     }
 
     private String createAccount(String name, AccountType type) throws Exception {
-        String response = mockMvc.perform(post("/api/v1/accounts")
+        String response = api(post("/api/v1/accounts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of("name", name, "type", type.name()))))
             .andExpect(status().isCreated())
@@ -304,13 +305,12 @@ class IncomeApiIT extends AbstractApiIT {
     }
 
     private void deactivateAccount(String id) throws Exception {
-        JsonNode account = objectMapper.readTree(mockMvc
-            .perform(get("/api/v1/accounts/{id}", id))
+        JsonNode account = objectMapper.readTree(api(get("/api/v1/accounts/{id}", id))
             .andExpect(status().isOk())
             .andReturn().getResponse().getContentAsString());
         String name = account.path("data").path("name").asText();
         String type = account.path("data").path("type").asText();
-        mockMvc.perform(put("/api/v1/accounts/{id}", id)
+        api(put("/api/v1/accounts/{id}", id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                     "name", name, "description", "", "type", type, "active", false))))
@@ -318,7 +318,7 @@ class IncomeApiIT extends AbstractApiIT {
     }
 
     private String createIncome(String accountId, String description, double amount, String receivedAt) throws Exception {
-        String response = mockMvc.perform(post("/api/v1/incomes")
+        String response = api(post("/api/v1/incomes")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                     "accountId", accountId,
@@ -328,5 +328,11 @@ class IncomeApiIT extends AbstractApiIT {
             .andExpect(status().isCreated())
             .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(response).path("data").path("id").asText();
+    }
+
+    private org.springframework.test.web.servlet.ResultActions api(
+        org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder builder)
+        throws Exception {
+        return mockMvc.perform(auth(builder));
     }
 }

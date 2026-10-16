@@ -2,6 +2,7 @@ package com.finance.application.usecase;
 
 import com.finance.domain.model.DailyBalanceEntry;
 import com.finance.domain.ports.out.DailyBalanceQueryPort;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -15,6 +16,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import com.finance.domain.ports.out.CurrentUserPort;
 
 @ExtendWith(MockitoExtension.class)
 class GetDailyBalanceUseCaseImplTest {
@@ -24,6 +26,15 @@ class GetDailyBalanceUseCaseImplTest {
 
     @InjectMocks
     private GetDailyBalanceUseCaseImpl useCase;
+
+    @Mock
+    private CurrentUserPort currentUserPort;
+
+    @BeforeEach
+    void stubCurrentUser() {
+        org.mockito.Mockito.lenient().when(currentUserPort.requireUserId())
+            .thenReturn(com.finance.shared.constants.AppConstants.LOCAL_USER_ID);
+    }
 
     @Test
     void accumulatesBalancesInOrder() {

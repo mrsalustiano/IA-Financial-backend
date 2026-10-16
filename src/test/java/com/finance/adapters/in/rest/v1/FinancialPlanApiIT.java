@@ -62,6 +62,7 @@ class FinancialPlanApiIT extends AbstractApiIT {
 
     @BeforeEach
     void cleanCollections() {
+        registerAndLogin();
         for (String collection : List.of("accounts", "incomes", "financial_plans", "audit_logs")) {
             mongoTemplate.getDb().getCollection(collection).deleteMany(new Document());
         }
@@ -71,7 +72,7 @@ class FinancialPlanApiIT extends AbstractApiIT {
     void createsPlanWithAiHistoryAuditAndEvent() throws Exception {
         createAccountWithIncome("Salario plano", 3000);
 
-        String body = mockMvc.perform(post("/api/v1/financial-plans")
+        String body = api(post("/api/v1/financial-plans")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"goal":"juntar 10 mil","targetAmount":10000,"targetDate":"2026-12-31"}
@@ -94,18 +95,18 @@ class FinancialPlanApiIT extends AbstractApiIT {
             .into(new java.util.ArrayList<>());
         assertThat(auditLogs).hasSize(1);
 
-        mockMvc.perform(get("/api/v1/financial-plans/{id}", planId))
+        api(get("/api/v1/financial-plans/{id}", planId))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.id").value(planId));
 
-        mockMvc.perform(get("/api/v1/financial-plans"))
+        api(get("/api/v1/financial-plans"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.totalElements").value(1));
     }
 
     @Test
     void createPlanWithoutIncomesReturns400() throws Exception {
-        mockMvc.perform(post("/api/v1/financial-plans")
+        api(post("/api/v1/financial-plans")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"goal":"meta sem dados"}
@@ -116,7 +117,7 @@ class FinancialPlanApiIT extends AbstractApiIT {
     @Test
     void createPlanWithOllamaErrorReturns503() throws Exception {
         createAccountWithIncome("Salario 503", 1000);
-        mockMvc.perform(post("/api/v1/financial-plans")
+        api(post("/api/v1/financial-plans")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"goal":"meta impossivel"}
@@ -127,7 +128,7 @@ class FinancialPlanApiIT extends AbstractApiIT {
     @Test
     void createPlanWithBlankGoalReturns400() throws Exception {
         createAccountWithIncome("Salario blank", 1000);
-        mockMvc.perform(post("/api/v1/financial-plans")
+        api(post("/api/v1/financial-plans")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"goal":""}
@@ -136,7 +137,7 @@ class FinancialPlanApiIT extends AbstractApiIT {
     }
 
     private void createAccountWithIncome(String description, double amount) throws Exception {
-        String account = mockMvc.perform(post("/api/v1/accounts")
+        String account = api(post("/api/v1/accounts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"Conta plano %s","description":"","type":"CONTA_CORRENTE","active":true}
@@ -144,11 +145,17 @@ class FinancialPlanApiIT extends AbstractApiIT {
             .andExpect(status().isCreated())
             .andReturn().getResponse().getContentAsString();
         String accountId = account.replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
-        mockMvc.perform(post("/api/v1/incomes")
+        api(post("/api/v1/incomes")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"accountId":"%s","description":"%s","amount":%s,"receivedAt":"%s"}
                         """.formatted(accountId, description, amount, java.time.LocalDate.now())))
             .andExpect(status().isCreated());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions api(
+        org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder builder)
+        throws Exception {
+        return mockMvc.perform(auth(builder));
     }
 }

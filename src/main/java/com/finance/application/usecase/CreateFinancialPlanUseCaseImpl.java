@@ -27,9 +27,12 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import com.finance.domain.ports.out.CurrentUserPort;
 
 @Service
 public class CreateFinancialPlanUseCaseImpl implements CreateFinancialPlanUseCase {
+
+    private final CurrentUserPort currentUserPort;
 
     private static final Logger log = LoggerFactory.getLogger(CreateFinancialPlanUseCaseImpl.class);
 
@@ -48,7 +51,9 @@ public class CreateFinancialPlanUseCaseImpl implements CreateFinancialPlanUseCas
                                           AiProviderPort aiProviderPort,
                                           FinancialAnalysisDomainService analysisDomainService,
                                           FinancialPlanningDomainService planningDomainService, AuditPort auditPort,
-                                          EventPublisherPort eventPublisherPort) {
+                                          EventPublisherPort eventPublisherPort,
+                                   CurrentUserPort currentUserPort) {
+        this.currentUserPort = currentUserPort;
         this.accountRepositoryPort = accountRepositoryPort;
         this.incomeRepositoryPort = incomeRepositoryPort;
         this.planRepositoryPort = planRepositoryPort;
@@ -67,7 +72,8 @@ public class CreateFinancialPlanUseCaseImpl implements CreateFinancialPlanUseCas
             .search(new AccountSearchQuery(null, true, PageRequest.of(0, 500, Sort.unsorted())))
             .content().size();
         PageResult<Income> incomes = incomeRepositoryPort
-            .search(new IncomeSearchQuery(null, null, null, PageRequest.of(0, 500, Sort.unsorted())));
+            .search(new IncomeSearchQuery(currentUserPort.requireUserId(), null, null, null,
+                PageRequest.of(0, 500, Sort.unsorted())));
         if (incomes.content().isEmpty()) {
             throw new ValidationException("Não há receitas suficientes para criar um plano");
         }
@@ -80,7 +86,7 @@ public class CreateFinancialPlanUseCaseImpl implements CreateFinancialPlanUseCas
 
         com.finance.domain.model.AiResponse aiResponse = aiProviderPort
             .complete(new com.finance.domain.model.AiPrompt(prompt, java.util.Map.of()));
-        FinancialPlan plan = FinancialPlan.create(Identifiers.newId(), AppConstants.LOCAL_USER_ID, command.goal(),
+        FinancialPlan plan = FinancialPlan.create(Identifiers.newId(), currentUserPort.requireUserId(), command.goal(),
             command.targetAmount(), command.targetDate(), prompt, aiResponse.content(),
             planningDomainService.parsePlanSteps(aiResponse.content()), aiResponse.provider(), aiResponse.model(),
             now);

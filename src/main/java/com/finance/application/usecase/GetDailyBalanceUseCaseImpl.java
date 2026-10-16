@@ -10,19 +10,24 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import com.finance.domain.ports.out.CurrentUserPort;
 
 @Service
 public class GetDailyBalanceUseCaseImpl implements GetDailyBalanceUseCase {
 
+    private final CurrentUserPort currentUserPort;
+
     private final DailyBalanceQueryPort dailyBalanceQueryPort;
 
-    public GetDailyBalanceUseCaseImpl(DailyBalanceQueryPort dailyBalanceQueryPort) {
+    public GetDailyBalanceUseCaseImpl(DailyBalanceQueryPort dailyBalanceQueryPort,
+                                   CurrentUserPort currentUserPort) {
+        this.currentUserPort = currentUserPort;
         this.dailyBalanceQueryPort = dailyBalanceQueryPort;
     }
 
     @Override
     public List<DailyBalanceEntry> handle(LocalDate startDate, LocalDate endDate) {
-        List<DailyBalanceEntry> entries = dailyBalanceQueryPort.findDailyBalances(AppConstants.LOCAL_USER_ID,
+        List<DailyBalanceEntry> entries = dailyBalanceQueryPort.findDailyBalances(currentUserPort.requireUserId(),
             startDate, endDate);
         List<DailyBalanceEntry> accumulated = new ArrayList<>(entries.size());
         BigDecimal running = BigDecimal.ZERO;

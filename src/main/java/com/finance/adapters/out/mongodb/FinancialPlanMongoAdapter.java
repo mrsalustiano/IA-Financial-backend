@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
+import com.finance.domain.ports.out.CurrentUserPort;
 
 @Component
 public class FinancialPlanMongoAdapter implements FinancialPlanRepositoryPort {
@@ -20,9 +21,12 @@ public class FinancialPlanMongoAdapter implements FinancialPlanRepositoryPort {
     private final FinancialPlanMongoRepository repository;
     private final FinancialPlanPersistenceMapper persistenceMapper;
     private final MongoTemplate mongoTemplate;
+    private final CurrentUserPort currentUserPort;
 
     public FinancialPlanMongoAdapter(FinancialPlanMongoRepository repository,
-                                     FinancialPlanPersistenceMapper persistenceMapper, MongoTemplate mongoTemplate) {
+                                     FinancialPlanPersistenceMapper persistenceMapper, MongoTemplate mongoTemplate,
+                                   CurrentUserPort currentUserPort) {
+        this.currentUserPort = currentUserPort;
         this.repository = repository;
         this.persistenceMapper = persistenceMapper;
         this.mongoTemplate = mongoTemplate;
@@ -40,7 +44,7 @@ public class FinancialPlanMongoAdapter implements FinancialPlanRepositoryPort {
 
     @Override
     public Optional<FinancialPlan> findById(String id) {
-        return repository.findByIdAndDeletedFalse(id).map(persistenceMapper::toDomain);
+        return repository.findByIdAndUserIdAndDeletedFalse(id, currentUserPort.requireUserId()).map(persistenceMapper::toDomain);
     }
 
     @Override
@@ -48,10 +52,10 @@ public class FinancialPlanMongoAdapter implements FinancialPlanRepositoryPort {
         try {
             int pageNumber = Math.max(page, 0);
             int pageSize = size <= 0 ? 20 : size;
-            long total = mongoTemplate.count(Query.query(Criteria.where("deleted").is(false)),
+            long total = mongoTemplate.count(Query.query(scopedCriteria()),
                 FinancialPlanDocument.class);
             List<FinancialPlan> content = mongoTemplate
-                .find(new Query(Criteria.where("deleted").is(false))
+                .find(new Query(scopedCriteria())
                     .with(PageRequest.of(pageNumber, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"))),
                     FinancialPlanDocument.class)
                 .stream()
@@ -62,5 +66,10 @@ public class FinancialPlanMongoAdapter implements FinancialPlanRepositoryPort {
         } catch (RuntimeException ex) {
             throw new DatabaseException("Falha ao buscar planos financeiros", ex);
         }
+    }
+
+    private Criteria scopedCriteria() {
+        return Criteria.where("userId").is(currentUserPort.requireUserId())
+            .and("deleted").is(false);
     }
 }

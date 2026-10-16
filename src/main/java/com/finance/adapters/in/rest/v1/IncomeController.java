@@ -100,7 +100,7 @@ public class IncomeController {
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
         @PageableDefault(size = 20, sort = "receivedAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        PageResult<Income> result = listIncomesUseCase.handle(new IncomeSearchQuery(accountId, startDate, endDate,
+        PageResult<Income> result = listIncomesUseCase.handle(new IncomeSearchQuery(null, accountId, startDate, endDate,
             pageable));
         List<IncomeResponseDto> content = result.content().stream().map(incomeDtoMapper::toResponseDto).toList();
         PageResponseDto<IncomeResponseDto> page = new PageResponseDto<>(content, result.page(), result.size(),

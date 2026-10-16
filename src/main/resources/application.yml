@@ -14,6 +14,14 @@ spring:
     generator:
       write-bigdecimal-as-plain: true
 
+security:
+  jwt:
+    # Assinatura HS256 (>= 32 bytes). Sobrescrever via variavel de ambiente JWT_SECRET em producao.
+    secret: "${JWT_SECRET:ZmFzZS1kZS1kZXNlbnZvbHZpbWVudG8tbG9jYWwtdHJvY2FyLXNlZ3JlZG8=}"
+    issuer: ia-financial
+    access-token-ttl: PT15M
+    refresh-token-ttl: PT168H
+
 server:
   port: 8080
 

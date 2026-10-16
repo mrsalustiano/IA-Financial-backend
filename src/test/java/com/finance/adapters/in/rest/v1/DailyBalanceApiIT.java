@@ -23,6 +23,7 @@ class DailyBalanceApiIT extends AbstractApiIT {
 
     @BeforeEach
     void cleanCollections() {
+        registerAndLogin();
         mongoTemplate.getDb().getCollection("accounts").deleteMany(new org.bson.Document());
         mongoTemplate.getDb().getCollection("incomes").deleteMany(new org.bson.Document());
     }
@@ -34,7 +35,7 @@ class DailyBalanceApiIT extends AbstractApiIT {
         createIncome(accountId, "Freelance", 500, "2026-10-10");
         createIncome(accountId, "Bonus", 250, "2026-10-10");
 
-        mockMvc.perform(get("/api/v1/daily-balance")
+        api(get("/api/v1/daily-balance")
                 .param("startDate", "2026-10-01")
                 .param("endDate", "2026-10-31"))
             .andExpect(status().isOk())
@@ -49,13 +50,13 @@ class DailyBalanceApiIT extends AbstractApiIT {
 
     @Test
     void returnsEmptyListWithoutMovements() throws Exception {
-        mockMvc.perform(get("/api/v1/daily-balance"))
+        api(get("/api/v1/daily-balance"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data").isEmpty());
     }
 
     private String createAccount() throws Exception {
-        String body = mockMvc.perform(post("/api/v1/accounts")
+        String body = api(post("/api/v1/accounts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"Conta saldo","description":"","type":"CONTA_CORRENTE","active":true}
@@ -67,11 +68,17 @@ class DailyBalanceApiIT extends AbstractApiIT {
 
     private void createIncome(String accountId, String description, double amount, String receivedAt)
         throws Exception {
-        mockMvc.perform(post("/api/v1/incomes")
+        api(post("/api/v1/incomes")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"accountId":"%s","description":"%s","amount":%s,"receivedAt":"%s"}
                         """.formatted(accountId, description, amount, receivedAt)))
             .andExpect(status().isCreated());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions api(
+        org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder builder)
+        throws Exception {
+        return mockMvc.perform(auth(builder));
     }
 }

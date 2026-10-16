@@ -62,6 +62,7 @@ class AssistantApiIT extends AbstractApiIT {
 
     @BeforeEach
     void cleanCollections() {
+        registerAndLogin();
         for (String collection : List.of("accounts", "incomes", "assistant_messages", "audit_logs")) {
             mongoTemplate.getDb().getCollection(collection).deleteMany(new Document());
         }
@@ -71,7 +72,7 @@ class AssistantApiIT extends AbstractApiIT {
     void answersQuestionUsingRegisteredDataAndPersistsHistory() throws Exception {
         createAccountWithIncome(3000);
 
-        String body = mockMvc.perform(post("/api/v1/assistant/questions")
+        String body = api(post("/api/v1/assistant/questions")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"question":"qual meu saldo de outubro?"}
@@ -93,18 +94,18 @@ class AssistantApiIT extends AbstractApiIT {
             .into(new java.util.ArrayList<>());
         assertThat(auditLogs).hasSize(1);
 
-        mockMvc.perform(get("/api/v1/assistant/questions/{id}", messageId))
+        api(get("/api/v1/assistant/questions/{id}", messageId))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.id").value(messageId));
 
-        mockMvc.perform(get("/api/v1/assistant/questions"))
+        api(get("/api/v1/assistant/questions"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.totalElements").value(1));
     }
 
     @Test
     void blankQuestionReturns400() throws Exception {
-        mockMvc.perform(post("/api/v1/assistant/questions")
+        api(post("/api/v1/assistant/questions")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"question":"  "}
@@ -115,7 +116,7 @@ class AssistantApiIT extends AbstractApiIT {
     @Test
     void ollamaFailureReturns503() throws Exception {
         createAccountWithIncome(1000);
-        mockMvc.perform(post("/api/v1/assistant/questions")
+        api(post("/api/v1/assistant/questions")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"question":"pergunta com erro"}
@@ -124,7 +125,7 @@ class AssistantApiIT extends AbstractApiIT {
     }
 
     private void createAccountWithIncome(double amount) throws Exception {
-        String account = mockMvc.perform(post("/api/v1/accounts")
+        String account = api(post("/api/v1/accounts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"Conta assistente","description":"","type":"CONTA_CORRENTE","active":true}
@@ -132,11 +133,17 @@ class AssistantApiIT extends AbstractApiIT {
             .andExpect(status().isCreated())
             .andReturn().getResponse().getContentAsString();
         String accountId = account.replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
-        mockMvc.perform(post("/api/v1/incomes")
+        api(post("/api/v1/incomes")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"accountId":"%s","description":"Salario","amount":%s,"receivedAt":"%s"}
                         """.formatted(accountId, amount, java.time.LocalDate.now())))
             .andExpect(status().isCreated());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions api(
+        org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder builder)
+        throws Exception {
+        return mockMvc.perform(auth(builder));
     }
 }

@@ -31,6 +31,7 @@ class CategoryApiIT extends AbstractApiIT {
 
     @BeforeEach
     void cleanCollections() {
+        registerAndLogin();
         mongoTemplate.getDb().getCollection("categories").deleteMany(new Document());
         mongoTemplate.getDb().getCollection("audit_logs").deleteMany(new Document());
     }
@@ -40,7 +41,7 @@ class CategoryApiIT extends AbstractApiIT {
         String body = """
             {"name":"Mercado","description":"Supermercado","classification":"DESPESA","active":true}
             """;
-        String location = mockMvc.perform(post("/api/v1/categories")
+        String location = api(post("/api/v1/categories")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
             .andExpect(status().isCreated())
@@ -59,7 +60,7 @@ class CategoryApiIT extends AbstractApiIT {
 
     @Test
     void createCategoryWithMissingFieldsReturns400() throws Exception {
-        mockMvc.perform(post("/api/v1/categories")
+        api(post("/api/v1/categories")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"description":"sem nome"}
@@ -70,7 +71,7 @@ class CategoryApiIT extends AbstractApiIT {
 
     @Test
     void createCategoryWithUnknownClassificationReturns400() throws Exception {
-        mockMvc.perform(post("/api/v1/categories")
+        api(post("/api/v1/categories")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"X","classification":"INVALIDA"}
@@ -82,7 +83,7 @@ class CategoryApiIT extends AbstractApiIT {
     @Test
     void createDuplicateCategoryNameReturns409() throws Exception {
         createCategory("Duplicada", "DESPESA");
-        mockMvc.perform(post("/api/v1/categories")
+        api(post("/api/v1/categories")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"duplicada","classification":"RECEITA"}
@@ -95,7 +96,7 @@ class CategoryApiIT extends AbstractApiIT {
         String id = createCategory("ToUpdate", "DESPESA");
         Document before = mongoTemplate.findById(id, Document.class, "categories");
         Thread.sleep(5);
-        mockMvc.perform(put("/api/v1/categories/{id}", id)
+        api(put("/api/v1/categories/{id}", id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"Updated","description":"","classification":"RECEITA","active":false}
@@ -117,9 +118,9 @@ class CategoryApiIT extends AbstractApiIT {
     @Test
     void deleteCategorySoftDeletesHidesAndAudits() throws Exception {
         String id = createCategory("Doomed", "RECEITA");
-        mockMvc.perform(delete("/api/v1/categories/{id}", id))
+        api(delete("/api/v1/categories/{id}", id))
             .andExpect(status().isNoContent());
-        mockMvc.perform(get("/api/v1/categories/{id}", id))
+        api(get("/api/v1/categories/{id}", id))
             .andExpect(status().isNotFound());
         Document document = mongoTemplate.findById(id, Document.class, "categories");
         assertThat(document).isNotNull();
@@ -137,7 +138,7 @@ class CategoryApiIT extends AbstractApiIT {
         createCategory("Cat A", "DESPESA");
         createCategory("Cat B", "RECEITA");
         createCategory("Cat C", "DESPESA");
-        mockMvc.perform(get("/api/v1/categories")
+        api(get("/api/v1/categories")
                 .param("classification", "DESPESA")
                 .param("page", "0")
                 .param("size", "1")
@@ -149,7 +150,7 @@ class CategoryApiIT extends AbstractApiIT {
     }
 
     private String createCategory(String name, String classification) throws Exception {
-        return mockMvc.perform(post("/api/v1/categories")
+        return api(post("/api/v1/categories")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"name":"%s","description":"","classification":"%s","active":true}
@@ -157,5 +158,11 @@ class CategoryApiIT extends AbstractApiIT {
             .andExpect(status().isCreated())
             .andReturn().getResponse().getContentAsString()
             .replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
+    }
+
+    private org.springframework.test.web.servlet.ResultActions api(
+        org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder builder)
+        throws Exception {
+        return mockMvc.perform(auth(builder));
     }
 }

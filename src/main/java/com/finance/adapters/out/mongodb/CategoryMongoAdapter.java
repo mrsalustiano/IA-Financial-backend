@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import com.finance.domain.ports.out.CurrentUserPort;
 
 @Component
 public class CategoryMongoAdapter implements CategoryRepositoryPort {
@@ -23,9 +24,12 @@ public class CategoryMongoAdapter implements CategoryRepositoryPort {
     private final CategoryMongoRepository repository;
     private final CategoryPersistenceMapper persistenceMapper;
     private final MongoTemplate mongoTemplate;
+    private final CurrentUserPort currentUserPort;
 
     public CategoryMongoAdapter(CategoryMongoRepository repository, CategoryPersistenceMapper persistenceMapper,
-                                MongoTemplate mongoTemplate) {
+                                MongoTemplate mongoTemplate,
+                                   CurrentUserPort currentUserPort) {
+        this.currentUserPort = currentUserPort;
         this.repository = repository;
         this.persistenceMapper = persistenceMapper;
         this.mongoTemplate = mongoTemplate;
@@ -43,21 +47,24 @@ public class CategoryMongoAdapter implements CategoryRepositoryPort {
 
     @Override
     public Optional<Category> findById(String id) {
-        return repository.findByIdAndDeletedFalse(id).map(persistenceMapper::toDomain);
+        return repository.findByIdAndUserIdAndDeletedFalse(id, currentUserPort.requireUserId()).map(persistenceMapper::toDomain);
     }
 
     @Override
     public boolean existsByName(String name, String excludeId) {
         if (excludeId == null) {
-            return repository.existsByNameIgnoreCaseAndDeletedFalse(name);
+            return repository.existsByNameIgnoreCaseAndUserIdAndDeletedFalse(name,
+                currentUserPort.requireUserId());
         }
-        return repository.existsByNameIgnoreCaseAndDeletedFalseAndIdNot(name, excludeId);
+        return repository.existsByNameIgnoreCaseAndUserIdAndDeletedFalseAndIdNot(name,
+                currentUserPort.requireUserId(), excludeId);
     }
 
     @Override
     public PageResult<Category> search(CategorySearchQuery query) {
         try {
             List<Criteria> parts = new ArrayList<>();
+            parts.add(Criteria.where("userId").is(currentUserPort.requireUserId()));
             parts.add(Criteria.where("deleted").is(false));
             if (query.classification() != null) {
                 parts.add(Criteria.where("classification").is(query.classification().name()));

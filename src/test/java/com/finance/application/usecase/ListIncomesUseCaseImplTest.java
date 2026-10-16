@@ -30,7 +30,7 @@ class ListIncomesUseCaseImplTest {
 
     @Test
     void delegatesSearchToRepository() {
-        IncomeSearchQuery query = new IncomeSearchQuery("acc-1", LocalDate.of(2026, 9, 1),
+        IncomeSearchQuery query = new IncomeSearchQuery(null, "acc-1", LocalDate.of(2026, 9, 1),
             LocalDate.of(2026, 9, 30), PageRequest.of(0, 10));
         Income income = Income.create("inc-1", "LOCAL_USER", "acc-1", "Salary", new BigDecimal("100"),
             LocalDate.of(2026, 9, 5), Instant.now());

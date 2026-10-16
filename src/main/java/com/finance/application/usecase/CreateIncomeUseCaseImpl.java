@@ -16,9 +16,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import com.finance.domain.ports.out.CurrentUserPort;
 
 @Service
 public class CreateIncomeUseCaseImpl implements CreateIncomeUseCase {
+
+    private final CurrentUserPort currentUserPort;
 
     private static final Logger log = LoggerFactory.getLogger(CreateIncomeUseCaseImpl.class);
 
@@ -29,7 +32,9 @@ public class CreateIncomeUseCaseImpl implements CreateIncomeUseCase {
 
     public CreateIncomeUseCaseImpl(IncomeRepositoryPort incomeRepositoryPort,
                                    AccountDomainService accountDomainService, AuditPort auditPort,
-                                   EventPublisherPort eventPublisherPort) {
+                                   EventPublisherPort eventPublisherPort,
+                                   CurrentUserPort currentUserPort) {
+        this.currentUserPort = currentUserPort;
         this.incomeRepositoryPort = incomeRepositoryPort;
         this.accountDomainService = accountDomainService;
         this.auditPort = auditPort;
@@ -41,7 +46,7 @@ public class CreateIncomeUseCaseImpl implements CreateIncomeUseCase {
         log.info("Creating income accountId={}", command.accountId());
         Instant now = Instant.now();
         accountDomainService.requireActiveAccount(command.accountId());
-        Income income = Income.create(Identifiers.newId(), AppConstants.LOCAL_USER_ID, command.accountId(),
+        Income income = Income.create(Identifiers.newId(), currentUserPort.requireUserId(), command.accountId(),
             command.description(), command.amount(), command.receivedAt(), now);
         Income saved = incomeRepositoryPort.save(income);
         auditPort.record(AppConstants.ENTITY_INCOME, saved.getId(), AuditAction.CRIACAO, null, saved);

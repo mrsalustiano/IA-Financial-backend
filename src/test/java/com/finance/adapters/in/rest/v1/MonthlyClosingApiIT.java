@@ -31,6 +31,7 @@ class MonthlyClosingApiIT extends AbstractApiIT {
 
     @BeforeEach
     void cleanCollections() {
+        registerAndLogin();
         for (String collection : List.of("accounts", "incomes", "monthly_closings", "audit_logs")) {
             mongoTemplate.getDb().getCollection(collection).deleteMany(new Document());
         }
@@ -43,7 +44,7 @@ class MonthlyClosingApiIT extends AbstractApiIT {
         createIncome(accountId, 1200);
         createIncome(accountId, 800);
 
-        mockMvc.perform(post("/api/v1/monthly-closings")
+        api(post("/api/v1/monthly-closings")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"month":"%s"}
@@ -69,14 +70,14 @@ class MonthlyClosingApiIT extends AbstractApiIT {
         YearMonth month = YearMonth.now();
         String accountId = createAccount();
         createIncome(accountId, 500);
-        mockMvc.perform(post("/api/v1/monthly-closings")
+        api(post("/api/v1/monthly-closings")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"month":"%s"}
                         """.formatted(month)))
             .andExpect(status().isCreated());
         createIncome(accountId, 700);
-        mockMvc.perform(post("/api/v1/monthly-closings")
+        api(post("/api/v1/monthly-closings")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"month":"%s"}
@@ -99,7 +100,7 @@ class MonthlyClosingApiIT extends AbstractApiIT {
     void schedulerGeneratesSnapshotForPreviousMonth() throws Exception {
         YearMonth previous = YearMonth.now().minusMonths(1);
         String accountId = createAccount();
-        mockMvc.perform(post("/api/v1/incomes")
+        api(post("/api/v1/incomes")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"accountId":"%s","description":"Antigo","amount":900,"receivedAt":"%s"}
@@ -109,7 +110,7 @@ class MonthlyClosingApiIT extends AbstractApiIT {
         scheduler.closePreviousMonth();
 
         List<Document> snapshots = mongoTemplate.getDb().getCollection("monthly_closings")
-            .find(new Document("referenceMonth", previous.toString()))
+            .find(new Document("referenceMonth", previous.toString()).append("userId", currentUserId))
             .into(new java.util.ArrayList<>());
         assertThat(snapshots).hasSize(1);
         assertThat(snapshots.getFirst().get("totalIncome", org.bson.types.Decimal128.class).bigDecimalValue())
@@ -118,7 +119,7 @@ class MonthlyClosingApiIT extends AbstractApiIT {
 
     @Test
     void invalidMonthReturns400() throws Exception {
-        mockMvc.perform(post("/api/v1/monthly-closings")
+        api(post("/api/v1/monthly-closings")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"month":"13/2026"}
@@ -132,7 +133,7 @@ class MonthlyClosingApiIT extends AbstractApiIT {
         YearMonth month = YearMonth.now();
         String accountId = createAccount();
         createIncome(accountId, 300);
-        String body = mockMvc.perform(post("/api/v1/monthly-closings")
+        String body = api(post("/api/v1/monthly-closings")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"month":"%s"}
@@ -141,20 +142,20 @@ class MonthlyClosingApiIT extends AbstractApiIT {
             .andReturn().getResponse().getContentAsString();
         String id = body.replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
 
-        mockMvc.perform(get("/api/v1/monthly-closings"))
+        api(get("/api/v1/monthly-closings"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.length()").value(1));
 
-        mockMvc.perform(get("/api/v1/monthly-closings/{id}", id))
+        api(get("/api/v1/monthly-closings/{id}", id))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.id").value(id));
 
-        mockMvc.perform(get("/api/v1/monthly-closings/{id}", "6f1f2b3c0000000000000000"))
+        api(get("/api/v1/monthly-closings/{id}", "6f1f2b3c0000000000000000"))
             .andExpect(status().isNotFound());
     }
 
     private String createAccount() throws Exception {
-        String body = mockMvc.perform(post("/api/v1/accounts")
+        String body = api(post("/api/v1/accounts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"Conta fechamento","description":"","type":"CONTA_CORRENTE","active":true}
@@ -165,11 +166,17 @@ class MonthlyClosingApiIT extends AbstractApiIT {
     }
 
     private void createIncome(String accountId, double amount) throws Exception {
-        mockMvc.perform(post("/api/v1/incomes")
+        api(post("/api/v1/incomes")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"accountId":"%s","description":"Receita","amount":%s,"receivedAt":"%s"}
                         """.formatted(accountId, amount, YearMonth.now().atDay(10))))
             .andExpect(status().isCreated());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions api(
+        org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder builder)
+        throws Exception {
+        return mockMvc.perform(auth(builder));
     }
 }

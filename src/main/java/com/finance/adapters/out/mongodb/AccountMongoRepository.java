@@ -9,4 +9,10 @@ public interface AccountMongoRepository extends MongoRepository<AccountDocument,
     boolean existsByNameIgnoreCaseAndDeletedFalse(String name);
 
     boolean existsByNameIgnoreCaseAndDeletedFalseAndIdNot(String name, String id);
+
+    java.util.Optional<AccountDocument> findByIdAndUserIdAndDeletedFalse(String id, String userId);
+
+    boolean existsByNameIgnoreCaseAndUserIdAndDeletedFalse(String name, String userId);
+
+    boolean existsByNameIgnoreCaseAndUserIdAndDeletedFalseAndIdNot(String name, String userId, String id);
 }

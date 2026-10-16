@@ -5,6 +5,8 @@ public final class AppConstants {
     public static final String LOCAL_USER_ID = "LOCAL_USER";
     public static final String API_V1 = "/api/v1";
     public static final String ENTITY_ACCOUNT = "Account";
+    public static final String ENTITY_USER = "User";
+    public static final String ENTITY_REFRESH_TOKEN = "RefreshToken";
     public static final String ENTITY_INCOME = "Income";
     public static final String ENTITY_CATEGORY = "Category";
     public static final String ENTITY_FINANCIAL_ANALYSIS = "FinancialAnalysis";

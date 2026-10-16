@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import com.finance.domain.ports.out.CurrentUserPort;
 
 @Component
 public class IncomeMongoAdapter implements IncomeRepositoryPort {
@@ -23,12 +24,14 @@ public class IncomeMongoAdapter implements IncomeRepositoryPort {
     private final IncomeMongoRepository repository;
     private final IncomePersistenceMapper persistenceMapper;
     private final MongoTemplate mongoTemplate;
+    private final CurrentUserPort currentUserPort;
 
     public IncomeMongoAdapter(IncomeMongoRepository repository, IncomePersistenceMapper persistenceMapper,
-                              MongoTemplate mongoTemplate) {
+                              MongoTemplate mongoTemplate, CurrentUserPort currentUserPort) {
         this.repository = repository;
         this.persistenceMapper = persistenceMapper;
         this.mongoTemplate = mongoTemplate;
+        this.currentUserPort = currentUserPort;
     }
 
     @Override
@@ -43,13 +46,17 @@ public class IncomeMongoAdapter implements IncomeRepositoryPort {
 
     @Override
     public Optional<Income> findById(String id) {
-        return repository.findByIdAndDeletedFalse(id).map(persistenceMapper::toDomain);
+        return repository.findByIdAndUserIdAndDeletedFalse(id, currentUserPort.requireUserId()).map(persistenceMapper::toDomain);
     }
 
     @Override
     public PageResult<Income> search(IncomeSearchQuery query) {
         try {
+            String userId = query.userId() != null && !query.userId().isBlank()
+                ? query.userId()
+                : currentUserPort.requireUserId();
             List<Criteria> parts = new ArrayList<>();
+            parts.add(Criteria.where("userId").is(userId));
             parts.add(Criteria.where("deleted").is(false));
             if (query.accountId() != null && !query.accountId().isBlank()) {
                 parts.add(Criteria.where("accountId").is(query.accountId()));

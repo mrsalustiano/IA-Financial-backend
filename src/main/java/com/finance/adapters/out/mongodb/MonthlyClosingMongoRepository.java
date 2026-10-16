@@ -7,9 +7,10 @@ import java.util.Optional;
 
 public interface MonthlyClosingMongoRepository extends MongoRepository<MonthlyClosingDocument, String> {
 
-    Optional<MonthlyClosingDocument> findByIdAndDeletedFalse(String id);
+    Optional<MonthlyClosingDocument> findByIdAndUserIdAndDeletedFalse(String id, String userId);
 
-    Optional<MonthlyClosingDocument> findByReferenceMonthAndDeletedFalse(String referenceMonth);
+    Optional<MonthlyClosingDocument> findByUserIdAndReferenceMonthAndDeletedFalse(String userId,
+                                                                                  String referenceMonth);
 
-    List<MonthlyClosingDocument> findByDeletedFalseOrderByReferenceMonthDesc();
+    List<MonthlyClosingDocument> findByUserIdAndDeletedFalseOrderByReferenceMonthDesc(String userId);
 }

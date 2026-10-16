@@ -16,9 +16,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import com.finance.domain.ports.out.CurrentUserPort;
 
 @Service
 public class CreateCategoryUseCaseImpl implements CreateCategoryUseCase {
+
+    private final CurrentUserPort currentUserPort;
 
     private static final Logger log = LoggerFactory.getLogger(CreateCategoryUseCaseImpl.class);
 
@@ -29,7 +32,9 @@ public class CreateCategoryUseCaseImpl implements CreateCategoryUseCase {
 
     public CreateCategoryUseCaseImpl(CategoryRepositoryPort categoryRepositoryPort,
                                      CategoryValidator categoryValidator, AuditPort auditPort,
-                                     EventPublisherPort eventPublisherPort) {
+                                     EventPublisherPort eventPublisherPort,
+                                   CurrentUserPort currentUserPort) {
+        this.currentUserPort = currentUserPort;
         this.categoryRepositoryPort = categoryRepositoryPort;
         this.categoryValidator = categoryValidator;
         this.auditPort = auditPort;
@@ -42,7 +47,7 @@ public class CreateCategoryUseCaseImpl implements CreateCategoryUseCase {
         Instant now = Instant.now();
         categoryValidator.ensureNameAvailable(command.name(), null);
         boolean active = !Boolean.FALSE.equals(command.active());
-        Category category = Category.create(Identifiers.newId(), AppConstants.LOCAL_USER_ID, command.name(),
+        Category category = Category.create(Identifiers.newId(), currentUserPort.requireUserId(), command.name(),
             command.description(), command.classification(), active, now);
         Category saved = categoryRepositoryPort.save(category);
         auditPort.record(AppConstants.ENTITY_CATEGORY, saved.getId(), AuditAction.CRIACAO, null, saved);

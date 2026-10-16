@@ -7,4 +7,6 @@ import java.util.Optional;
 public interface FinancialAnalysisMongoRepository extends MongoRepository<FinancialAnalysisDocument, String> {
 
     Optional<FinancialAnalysisDocument> findByIdAndDeletedFalse(String id);
+
+    Optional<FinancialAnalysisDocument> findByIdAndUserIdAndDeletedFalse(String id, String userId);
 }

@@ -67,6 +67,7 @@ class FinancialAnalysisApiIT extends AbstractApiIT {
 
     @BeforeEach
     void cleanCollections() {
+        registerAndLogin();
         mongoTemplate.getDb().getCollection("accounts").deleteMany(new Document());
         mongoTemplate.getDb().getCollection("incomes").deleteMany(new Document());
         mongoTemplate.getDb().getCollection("financial_analyses").deleteMany(new Document());
@@ -77,7 +78,7 @@ class FinancialAnalysisApiIT extends AbstractApiIT {
     void generateAnalysisReturns201PersistsHistoryAuditAndEvent() throws Exception {
         createAccountWithIncome();
 
-        String body = mockMvc.perform(post("/api/v1/financial-analysis")
+        String body = api(post("/api/v1/financial-analysis")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"focus":"economia mensal"}
@@ -101,11 +102,11 @@ class FinancialAnalysisApiIT extends AbstractApiIT {
             .into(new java.util.ArrayList<>());
         assertThat(auditLogs).hasSize(1);
 
-        mockMvc.perform(get("/api/v1/financial-analysis/{id}", analysisId))
+        api(get("/api/v1/financial-analysis/{id}", analysisId))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.id").value(analysisId));
 
-        mockMvc.perform(get("/api/v1/financial-analysis")
+        api(get("/api/v1/financial-analysis")
                 .param("page", "0")
                 .param("size", "10"))
             .andExpect(status().isOk())
@@ -114,7 +115,7 @@ class FinancialAnalysisApiIT extends AbstractApiIT {
 
     @Test
     void generateAnalysisWithoutIncomesReturns422() throws Exception {
-        mockMvc.perform(post("/api/v1/financial-analysis")
+        api(post("/api/v1/financial-analysis")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
             .andExpect(status().isBadRequest())
@@ -125,14 +126,14 @@ class FinancialAnalysisApiIT extends AbstractApiIT {
     void generateAnalysisWithOllamaDownReturns503() throws Exception {
         createAccountWithIncome();
 
-        mockMvc.perform(post("/api/v1/financial-analysis")
+        api(post("/api/v1/financial-analysis")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
             .andExpect(status().isServiceUnavailable());
     }
 
     private void createAccountWithIncome() throws Exception {
-        String account = mockMvc.perform(post("/api/v1/accounts")
+        String account = api(post("/api/v1/accounts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"name":"Conta analise","description":"","type":"CONTA_CORRENTE","active":true}
@@ -140,11 +141,17 @@ class FinancialAnalysisApiIT extends AbstractApiIT {
             .andExpect(status().isCreated())
             .andReturn().getResponse().getContentAsString();
         String accountId = account.replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
-        mockMvc.perform(post("/api/v1/incomes")
+        api(post("/api/v1/incomes")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"accountId":"%s","description":"Salario","amount":3000,"receivedAt":"%s"}
                         """.formatted(accountId, java.time.LocalDate.now())))
             .andExpect(status().isCreated());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions api(
+        org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder builder)
+        throws Exception {
+        return mockMvc.perform(auth(builder));
     }
 }

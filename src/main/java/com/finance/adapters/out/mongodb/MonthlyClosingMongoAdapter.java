@@ -31,18 +31,19 @@ public class MonthlyClosingMongoAdapter implements MonthlyClosingRepositoryPort 
     }
 
     @Override
-    public Optional<MonthlyClosing> findById(String id) {
-        return repository.findByIdAndDeletedFalse(id).map(persistenceMapper::toDomain);
+    public Optional<MonthlyClosing> findByIdAndUser(String userId, String id) {
+        return repository.findByIdAndUserIdAndDeletedFalse(id, userId).map(persistenceMapper::toDomain);
     }
 
     @Override
-    public Optional<MonthlyClosing> findByReferenceMonth(String referenceMonth) {
-        return repository.findByReferenceMonthAndDeletedFalse(referenceMonth).map(persistenceMapper::toDomain);
+    public Optional<MonthlyClosing> findByUserAndReferenceMonth(String userId, String referenceMonth) {
+        return repository.findByUserIdAndReferenceMonthAndDeletedFalse(userId, referenceMonth)
+            .map(persistenceMapper::toDomain);
     }
 
     @Override
-    public List<MonthlyClosing> findAll() {
-        return repository.findByDeletedFalseOrderByReferenceMonthDesc().stream()
+    public List<MonthlyClosing> findAllByUser(String userId) {
+        return repository.findByUserIdAndDeletedFalseOrderByReferenceMonthDesc(userId).stream()
             .map(persistenceMapper::toDomain)
             .toList();
     }

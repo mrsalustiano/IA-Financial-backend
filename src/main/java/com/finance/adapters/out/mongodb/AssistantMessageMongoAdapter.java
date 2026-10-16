@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
+import com.finance.domain.ports.out.CurrentUserPort;
 
 @Component
 public class AssistantMessageMongoAdapter implements AssistantMessageRepositoryPort {
@@ -20,10 +21,13 @@ public class AssistantMessageMongoAdapter implements AssistantMessageRepositoryP
     private final AssistantMessageMongoRepository repository;
     private final AssistantMessagePersistenceMapper persistenceMapper;
     private final MongoTemplate mongoTemplate;
+    private final CurrentUserPort currentUserPort;
 
     public AssistantMessageMongoAdapter(AssistantMessageMongoRepository repository,
                                         AssistantMessagePersistenceMapper persistenceMapper,
-                                        MongoTemplate mongoTemplate) {
+                                        MongoTemplate mongoTemplate,
+                                   CurrentUserPort currentUserPort) {
+        this.currentUserPort = currentUserPort;
         this.repository = repository;
         this.persistenceMapper = persistenceMapper;
         this.mongoTemplate = mongoTemplate;
@@ -41,7 +45,7 @@ public class AssistantMessageMongoAdapter implements AssistantMessageRepositoryP
 
     @Override
     public Optional<AssistantMessage> findById(String id) {
-        return repository.findByIdAndDeletedFalse(id).map(persistenceMapper::toDomain);
+        return repository.findByIdAndUserIdAndDeletedFalse(id, currentUserPort.requireUserId()).map(persistenceMapper::toDomain);
     }
 
     @Override
@@ -49,10 +53,10 @@ public class AssistantMessageMongoAdapter implements AssistantMessageRepositoryP
         try {
             int pageNumber = Math.max(page, 0);
             int pageSize = size <= 0 ? 20 : size;
-            long total = mongoTemplate.count(Query.query(Criteria.where("deleted").is(false)),
+            long total = mongoTemplate.count(Query.query(scopedCriteria()),
                 AssistantMessageDocument.class);
             List<AssistantMessage> content = mongoTemplate
-                .find(new Query(Criteria.where("deleted").is(false))
+                .find(new Query(scopedCriteria())
                     .with(PageRequest.of(pageNumber, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"))),
                     AssistantMessageDocument.class)
                 .stream()
@@ -63,5 +67,10 @@ public class AssistantMessageMongoAdapter implements AssistantMessageRepositoryP
         } catch (RuntimeException ex) {
             throw new DatabaseException("Falha ao buscar mensagens", ex);
         }
+    }
+
+    private Criteria scopedCriteria() {
+        return Criteria.where("userId").is(currentUserPort.requireUserId())
+            .and("deleted").is(false);
     }
 }

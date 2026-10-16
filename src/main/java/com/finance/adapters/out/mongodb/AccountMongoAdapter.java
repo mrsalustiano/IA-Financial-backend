@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
+import com.finance.domain.ports.out.CurrentUserPort;
 
 @Component
 public class AccountMongoAdapter implements AccountRepositoryPort {
@@ -22,9 +23,12 @@ public class AccountMongoAdapter implements AccountRepositoryPort {
     private final AccountMongoRepository repository;
     private final AccountPersistenceMapper persistenceMapper;
     private final MongoTemplate mongoTemplate;
+    private final CurrentUserPort currentUserPort;
 
     public AccountMongoAdapter(AccountMongoRepository repository, AccountPersistenceMapper persistenceMapper,
-                               MongoTemplate mongoTemplate) {
+                               MongoTemplate mongoTemplate,
+                                   CurrentUserPort currentUserPort) {
+        this.currentUserPort = currentUserPort;
         this.repository = repository;
         this.persistenceMapper = persistenceMapper;
         this.mongoTemplate = mongoTemplate;
@@ -42,21 +46,23 @@ public class AccountMongoAdapter implements AccountRepositoryPort {
 
     @Override
     public Optional<Account> findById(String id) {
-        return repository.findByIdAndDeletedFalse(id).map(persistenceMapper::toDomain);
+        return repository.findByIdAndUserIdAndDeletedFalse(id, currentUserPort.requireUserId()).map(persistenceMapper::toDomain);
     }
 
     @Override
     public boolean existsByName(String name, String excludeId) {
         if (excludeId == null) {
-            return repository.existsByNameIgnoreCaseAndDeletedFalse(name);
+            return repository.existsByNameIgnoreCaseAndUserIdAndDeletedFalse(name,
+                currentUserPort.requireUserId());
         }
-        return repository.existsByNameIgnoreCaseAndDeletedFalseAndIdNot(name, excludeId);
+        return repository.existsByNameIgnoreCaseAndUserIdAndDeletedFalseAndIdNot(name,
+                currentUserPort.requireUserId(), excludeId);
     }
 
     @Override
     public PageResult<Account> search(AccountSearchQuery query) {
         try {
-            Criteria criteria = Criteria.where("deleted").is(false);
+            Criteria criteria = Criteria.where("userId").is(currentUserPort.requireUserId()).and("deleted").is(false);
             if (query.type() != null) {
                 criteria = criteria.and("type").is(query.type().name());
             }
