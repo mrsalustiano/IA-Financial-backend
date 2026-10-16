@@ -3,11 +3,11 @@
 Sistema de controle financeiro pessoal com IA, construído com **Java 21**, **Spring Boot 3.5.6** e
 **Arquitetura Hexagonal (Ports and Adapters)**.
 
-Escopo atual: **FASE 1 — Cadastro de Contas e Receitas (CRUD)**, **FASE 2 — Alteração e Exclusão
-(soft delete + auditoria)**, **FASE 3 — Listagem (paginação, ordenação e filtros)**, **FASE 4 —
-Categorias** e **FASE 5 — Análise financeira com IA (Ollama)**, além da fundação transversal
-(tratamento de erros, envelope de resposta, trilha de auditoria, soft delete, validadores de schema
-do MongoDB, OpenAPI e adaptador Ollama).
+Escopo atual: **FASES 1–5 concluídas** (CRUD, alteração/exclusão com auditoria, listagem, categorias,
+análise com IA) e **FASE 6 — Saldo Diário**, **FASE 7 — Fechamento Mensal (scheduler)**,
+**FASE 8 — Planejamento Financeiro com IA** e **FASE 9 — Assistente Financeiro com IA**, além da
+fundação transversal (tratamento de erros, envelope de resposta, trilha de auditoria, soft delete,
+validadores de schema do MongoDB, OpenAPI e adaptador Ollama).
 
 ## Fases
 
@@ -18,7 +18,10 @@ do MongoDB, OpenAPI e adaptador Ollama).
 | 3 | Listagem com paginação, ordenação e filtros | ✅ Concluída |
 | 4 | Categorias com classificação | ✅ Concluída |
 | 5 | Análise financeira com IA (Ollama) | ✅ Concluída |
-| 6–9 | Saldo diário, fechamento mensal, planejamento, assistente | ⏳ Pendentes |
+| 6 | Saldo diário acumulado (consulta otimizada) | ✅ Concluída |
+| 7 | Fechamento mensal com scheduler e snapshot | ✅ Concluída |
+| 8 | Planejamento financeiro com IA | ✅ Concluída |
+| 9 | Assistente financeiro com IA | ✅ Concluída |
 
 ## Como executar
 
@@ -78,6 +81,16 @@ ambos; o núcleo não conhece tipos de Spring Web/Data além dos registros de qu
 | POST | `/api/v1/financial-analysis` | Gerar análise financeira com IA | 201 |
 | GET | `/api/v1/financial-analysis/{id}` | Buscar análise por id | 200 |
 | GET | `/api/v1/financial-analysis?page=&size=` | Histórico de análises | 200 |
+| GET | `/api/v1/daily-balance?startDate=&endDate=` | Saldo diário acumulado | 200 |
+| POST | `/api/v1/monthly-closings` | Gerar fechamento mensal (snapshot + auditoria) | 201 |
+| GET | `/api/v1/monthly-closings/{id}` | Buscar fechamento por id | 200 |
+| GET | `/api/v1/monthly-closings` | Listar fechamentos | 200 |
+| POST | `/api/v1/financial-plans` | Criar plano de economia com IA | 201 |
+| GET | `/api/v1/financial-plans/{id}` | Buscar plano por id | 200 |
+| GET | `/api/v1/financial-plans?page=&size=` | Histórico de planos | 200 |
+| POST | `/api/v1/assistant/questions` | Perguntar ao assistente financeiro (IA) | 201 |
+| GET | `/api/v1/assistant/questions/{id}` | Buscar pergunta/resposta por id | 200 |
+| GET | `/api/v1/assistant/questions?page=&size=` | Histórico de perguntas | 200 |
 
 Parâmetros de listagem:
 - Contas: `type` (`CONTA_CORRENTE`, `POUPANCA`, `CARTAO_CREDITO`, `DINHEIRO`, `INVESTIMENTO`),
@@ -86,7 +99,9 @@ Parâmetros de listagem:
   `sort` (padrão: `receivedAt,desc`).
 - Categorias: `classification` (`DESPESA`, `RECEITA`), `active`, `page`, `size`,
   `sort` (padrão: `name,asc`).
-- Análises: `page`, `size` (padrão: ordenado por `createdAt,desc`).
+- Análises, planos e perguntas: `page`, `size` (padrão: `createdAt,desc`).
+- Saldo diário: `startDate`, `endDate` (ISO `yyyy-MM-dd`) — aggregation no MongoDB usando o índice
+  `userId+receivedAt`, com saldo acumulado calculado em ordem de data.
 
 Respostas de sucesso usam o envelope `{"data": ..., "message": "Sucesso", "timestamp": ...}`.
 Erros usam `{"timestamp", "status", "error", "message", "details"}` com os códigos abaixo.
@@ -109,6 +124,9 @@ Erros usam `{"timestamp", "status", "error", "message", "details"}` com os códi
 - `incomes`: `_id, userId, accountId (indexado), description, amount (Decimal128), receivedAt (data), deleted, deletedAt, createdAt, updatedAt` — validador + índices em `userId+receivedAt` e `accountId+receivedAt`.
 - `categories`: `_id, userId, name, description, classification (DESPESA/RECEITA), active, deleted, deletedAt, createdAt, updatedAt` — validador `$jsonSchema` com enum de classificação, índices em `userId+name`, `classification`, `active`, `deleted`.
 - `financial_analyses`: `_id, userId, prompt, response, score (0–100), recommendations (array), provider, model, deleted, deletedAt, createdAt, updatedAt` — histórico de cada análise gerada com IA, com prompt e resposta registrados; índices em `userId+createdAt` e `deleted`.
+- `monthly_closings`: `_id, userId, referenceMonth ("yyyy-MM"), totalIncome, totalExpense, balance, closedAt, deleted, deletedAt, createdAt, updatedAt` — snapshot mensal gerado pelo scheduler (todo dia 1º às 00:05, mês anterior) ou por geração manual; reexecução no mesmo mês atualiza o snapshot (auditoria registra ATUALIZACAO); índices em `userId+referenceMonth` e `deleted`.
+- `financial_plans`: `_id, userId, goal, targetAmount, targetDate, prompt, response, recommendations, provider, model, deleted, deletedAt, createdAt, updatedAt` — histórico dos planos de economia sugeridos pela IA; índices em `userId+createdAt` e `deleted`.
+- `assistant_messages`: `_id, userId, question, answer, provider, model, deleted, deletedAt, createdAt, updatedAt` — histórico de perguntas e respostas do assistente; índices em `userId+createdAt` e `deleted`.
 - `audit_logs`: `entityType, entityId, action (CRIACAO/ATUALIZACAO/EXCLUSAO), oldValue, newValue (JSON), createdAt` — gravado em toda mutação dos casos de uso.
 
 Valores monetários são armazenados como BSON `Decimal128` (converters customizados) e `LocalDate`
@@ -116,7 +134,7 @@ como data BSON (UTC) — escolhas que mantêm agregações futuras (saldos mensa
 corretas. A exclusão é sempre lógica: nenhum documento é removido e todas as leituras filtram
 `deleted: false`.
 
-## Critérios de Aceite — FASES 1 a 5 (Gherkin)
+## Critérios de Aceite — FASES 1 a 9 (Gherkin)
 
 ```gherkin
 Feature: Gerenciamento de contas
@@ -273,6 +291,71 @@ Feature: Análise financeira com IA
     Quando solicita a geração da análise
     Então a API retorna HTTP 503
     E nada é gravado no histórico
+
+Feature: Saldo diário
+
+  Cenário: Consultar saldo diário
+    Dado que existam movimentações
+    Quando o usuário consulta o saldo
+    Então o saldo diário acumulado é calculado em ordem de data
+
+  Cenário: Consultar saldo sem movimentações
+    Dado que não existam movimentações no período
+    Quando o usuário consulta o saldo
+    Então a lista vem vazia com HTTP 200
+
+Feature: Fechamento mensal
+
+  Cenário: Gerar fechamento mensal
+    Dado que o mês foi encerrado
+    Quando o scheduler for executado (ou o fechamento manual for solicitado)
+    Então o saldo mensal é persistido em monthly_closings
+    E a auditoria registra a ação CRIACAO
+
+  Cenário: Reexecutar fechamento do mesmo mês
+    Dado que já existe snapshot do mês
+    Quando o fechamento é gerado novamente
+    Então o snapshot existente é atualizado
+    E a auditoria registra ATUALIZACAO com oldValue e newValue
+
+  Cenário: Mês inválido
+    Dado um mês fora do formato yyyy-MM
+    Quando o fechamento manual é solicitado
+    Então a API retorna HTTP 400
+
+Feature: Planejamento financeiro
+
+  Cenário: Criar plano de economia
+    Dado uma meta financeira
+    Quando a IA processa os dados
+    Então um plano com passos práticos é sugerido
+    E o histórico com prompt e resposta é registrado
+    E a auditoria registra a ação CRIACAO
+
+  Cenário: Meta sem dados suficientes
+    Dado que o usuário não possui receitas
+    Quando solicita um plano
+    Então a API retorna HTTP 400
+
+Feature: Assistente financeiro
+
+  Cenário: Consultar assistente financeiro
+    Dado que existam dados financeiros
+    Quando uma pergunta é realizada
+    Então a IA responde utilizando o contexto dos dados cadastrados
+    E a pergunta e a resposta ficam no histórico (assistant_messages)
+    E a auditoria registra a ação CRIACAO
+
+  Cenário: Pergunta vazia
+    Dado que a pergunta é vazia ou em branco
+    Quando a pergunta é enviada
+    Então a API retorna HTTP 400
+
+  Cenário: Provedor de IA indisponível
+    Dado que o Ollama não responde
+    Quando a pergunta é enviada
+    Então a API retorna HTTP 503
+    E nada é gravado no histórico
 ```
 
 ## Definition of Done
@@ -281,6 +364,10 @@ Feature: Análise financeira com IA
 - [x] FASES 1–3: CRUD completo de contas e receitas, com listagem paginada/ordenada/filtrada
 - [x] FASE 4: categorias com classificação (DESPESA/RECEITA), CRUD completo e filtro por classificação
 - [x] FASE 5: análise financeira com IA via `AiProviderPort` (Ollama), score 0–100 deterministicamente calculado, histórico com prompt/resposta, eventos e auditoria; WireMock nos testes de integração
+- [x] FASE 6: saldo diário acumulado via aggregation no MongoDB (índice `userId+receivedAt`), filtrável por período
+- [x] FASE 7: fechamento mensal com scheduler (`@Scheduled` cron, mês anterior), snapshot persistido em `monthly_closings`, idempotente por mês e com auditoria CRIACAO/ATUALIZACAO
+- [x] FASE 8: plano de economia com IA a partir de uma meta (valor/data alvo opcionais), histórico em `financial_plans`, auditoria e evento
+- [x] FASE 9: assistente financeiro que responde com o contexto dos dados cadastrados, histórico em `assistant_messages`, auditoria e evento
 - [x] Alteração renova `updatedAt` e registra auditoria com oldValue/newValue
 - [x] Exclusão lógica (`deleted`/`deletedAt`) com auditoria — sem exclusão física
 - [x] Exceções obrigatórias + GlobalExceptionHandler com os códigos HTTP exigidos
@@ -290,8 +377,8 @@ Feature: Análise financeira com IA
 - [x] MongoDB com validadores `$jsonSchema`, índices, money em Decimal128, datas BSON
 - [x] Swagger UI (`/swagger-ui.html`) + actuator health/info/metrics
 - [x] Adaptador Ollama atrás de `AiProviderPort` (testado com WireMock)
-- [x] 144 testes (unitários + integração de API em MongoDB embutido e WireMock), **91,6% de cobertura de linhas** (gate JaCoCo ≥ 90%)
-- [ ] Autenticação JWT, saldo diário (FASE 6), fechamento mensal (FASE 7), planejamento (FASE 8), assistente (FASE 9) — próximas fases
+- [x] 185 testes (unitários + integração de API em MongoDB embutido e WireMock), **90,8% de cobertura de linhas** (gate JaCoCo ≥ 90%)
+- [ ] Autenticação JWT e multiusuário — próximos passos
 
 ## Notas de ferramentas de teste
 

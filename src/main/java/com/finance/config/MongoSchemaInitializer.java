@@ -50,6 +50,15 @@ public class MongoSchemaInitializer implements ApplicationRunner {
             ensureCollection("financial_analyses", FINANCIAL_ANALYSIS_VALIDATOR,
                 List.of(new Index().on("userId", Sort.Direction.ASC).on("createdAt", Sort.Direction.DESC),
                     new Index().on("deleted", Sort.Direction.ASC)));
+            ensureCollection("monthly_closings", MONTHLY_CLOSING_VALIDATOR,
+                List.of(new Index().on("userId", Sort.Direction.ASC).on("referenceMonth", Sort.Direction.ASC),
+                    new Index().on("deleted", Sort.Direction.ASC)));
+            ensureCollection("financial_plans", FINANCIAL_PLAN_VALIDATOR,
+                List.of(new Index().on("userId", Sort.Direction.ASC).on("createdAt", Sort.Direction.DESC),
+                    new Index().on("deleted", Sort.Direction.ASC)));
+            ensureCollection("assistant_messages", ASSISTANT_MESSAGE_VALIDATOR,
+                List.of(new Index().on("userId", Sort.Direction.ASC).on("createdAt", Sort.Direction.DESC),
+                    new Index().on("deleted", Sort.Direction.ASC)));
             ensureCollection("audit_logs", null,
                 List.of(new Index().on("entityType", Sort.Direction.ASC).on("entityId", Sort.Direction.ASC),
                     new Index().on("createdAt", Sort.Direction.DESC)));
@@ -134,6 +143,75 @@ public class MongoSchemaInitializer implements ApplicationRunner {
               "response": {"bsonType": "string"},
               "score": {"bsonType": ["int", "long", "double"]},
               "recommendations": {"bsonType": "array"},
+              "provider": {"bsonType": ["string", "null"]},
+              "model": {"bsonType": ["string", "null"]},
+              "deleted": {"bsonType": "bool"},
+              "deletedAt": {"bsonType": ["date", "null"]},
+              "createdAt": {"bsonType": "date"},
+              "updatedAt": {"bsonType": ["date", "null"]}
+            }
+          }
+        }
+        """;
+
+    private static final String MONTHLY_CLOSING_VALIDATOR = """
+        {
+          "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["_id", "userId", "referenceMonth", "totalIncome", "totalExpense", "balance",
+              "closedAt", "createdAt"],
+            "properties": {
+              "_id": {"bsonType": "string"},
+              "userId": {"bsonType": "string"},
+              "referenceMonth": {"bsonType": "string", "pattern": "^\\\\d{4}-(0[1-9]|1[0-2])$"},
+              "totalIncome": {"bsonType": ["decimal", "double", "int", "long"]},
+              "totalExpense": {"bsonType": ["decimal", "double", "int", "long"]},
+              "balance": {"bsonType": ["decimal", "double", "int", "long"]},
+              "closedAt": {"bsonType": "date"},
+              "deleted": {"bsonType": "bool"},
+              "deletedAt": {"bsonType": ["date", "null"]},
+              "createdAt": {"bsonType": "date"},
+              "updatedAt": {"bsonType": ["date", "null"]}
+            }
+          }
+        }
+        """;
+
+    private static final String FINANCIAL_PLAN_VALIDATOR = """
+        {
+          "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["_id", "userId", "goal", "prompt", "response", "createdAt"],
+            "properties": {
+              "_id": {"bsonType": "string"},
+              "userId": {"bsonType": "string"},
+              "goal": {"bsonType": "string"},
+              "targetAmount": {"bsonType": ["decimal", "double", "int", "long", "null"]},
+              "targetDate": {"bsonType": ["date", "null"]},
+              "prompt": {"bsonType": "string"},
+              "response": {"bsonType": "string"},
+              "recommendations": {"bsonType": "array"},
+              "provider": {"bsonType": ["string", "null"]},
+              "model": {"bsonType": ["string", "null"]},
+              "deleted": {"bsonType": "bool"},
+              "deletedAt": {"bsonType": ["date", "null"]},
+              "createdAt": {"bsonType": "date"},
+              "updatedAt": {"bsonType": ["date", "null"]}
+            }
+          }
+        }
+        """;
+
+    private static final String ASSISTANT_MESSAGE_VALIDATOR = """
+        {
+          "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["_id", "userId", "question", "answer", "createdAt"],
+            "properties": {
+              "_id": {"bsonType": "string"},
+              "userId": {"bsonType": "string"},
+              "question": {"bsonType": "string"},
+              "answer": {"bsonType": "string"},
               "provider": {"bsonType": ["string", "null"]},
               "model": {"bsonType": ["string", "null"]},
               "deleted": {"bsonType": "bool"},

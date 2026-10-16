@@ -10,6 +10,9 @@ spring:
       password: admin123
       authentication-database: admin
       auto-index-creation: false
+  jackson:
+    generator:
+      write-bigdecimal-as-plain: true
 
 server:
   port: 8080
@@ -30,6 +33,10 @@ ollama:
   base-url: http://localhost:11434
   model: llama3
   timeout: 60s
+
+app:
+  monthly-closing:
+    cron: "0 5 0 1 * *"
 
 logging:
   level:
