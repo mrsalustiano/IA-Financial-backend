@@ -42,6 +42,14 @@ public class MongoSchemaInitializer implements ApplicationRunner {
                 List.of(new Index().on("userId", Sort.Direction.ASC).on("receivedAt", Sort.Direction.DESC),
                     new Index().on("accountId", Sort.Direction.ASC).on("receivedAt", Sort.Direction.DESC),
                     new Index().on("deleted", Sort.Direction.ASC)));
+            ensureCollection("categories", CATEGORY_VALIDATOR,
+                List.of(new Index().on("userId", Sort.Direction.ASC).on("name", Sort.Direction.ASC),
+                    new Index().on("classification", Sort.Direction.ASC),
+                    new Index().on("active", Sort.Direction.ASC),
+                    new Index().on("deleted", Sort.Direction.ASC)));
+            ensureCollection("financial_analyses", FINANCIAL_ANALYSIS_VALIDATOR,
+                List.of(new Index().on("userId", Sort.Direction.ASC).on("createdAt", Sort.Direction.DESC),
+                    new Index().on("deleted", Sort.Direction.ASC)));
             ensureCollection("audit_logs", null,
                 List.of(new Index().on("entityType", Sort.Direction.ASC).on("entityId", Sort.Direction.ASC),
                     new Index().on("createdAt", Sort.Direction.DESC)));
@@ -84,6 +92,50 @@ public class MongoSchemaInitializer implements ApplicationRunner {
               "description": {"bsonType": ["string", "null"]},
               "type": {"enum": ["CONTA_CORRENTE", "POUPANCA", "CARTAO_CREDITO", "DINHEIRO", "INVESTIMENTO"]},
               "active": {"bsonType": "bool"},
+              "deleted": {"bsonType": "bool"},
+              "deletedAt": {"bsonType": ["date", "null"]},
+              "createdAt": {"bsonType": "date"},
+              "updatedAt": {"bsonType": ["date", "null"]}
+            }
+          }
+        }
+        """;
+
+    private static final String CATEGORY_VALIDATOR = """
+        {
+          "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["_id", "userId", "name", "classification", "active", "deleted", "createdAt"],
+            "properties": {
+              "_id": {"bsonType": "string"},
+              "userId": {"bsonType": "string"},
+              "name": {"bsonType": "string"},
+              "description": {"bsonType": ["string", "null"]},
+              "classification": {"enum": ["DESPESA", "RECEITA"]},
+              "active": {"bsonType": "bool"},
+              "deleted": {"bsonType": "bool"},
+              "deletedAt": {"bsonType": ["date", "null"]},
+              "createdAt": {"bsonType": "date"},
+              "updatedAt": {"bsonType": ["date", "null"]}
+            }
+          }
+        }
+        """;
+
+    private static final String FINANCIAL_ANALYSIS_VALIDATOR = """
+        {
+          "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["_id", "userId", "prompt", "response", "score", "recommendations", "createdAt"],
+            "properties": {
+              "_id": {"bsonType": "string"},
+              "userId": {"bsonType": "string"},
+              "prompt": {"bsonType": "string"},
+              "response": {"bsonType": "string"},
+              "score": {"bsonType": ["int", "long", "double"]},
+              "recommendations": {"bsonType": "array"},
+              "provider": {"bsonType": ["string", "null"]},
+              "model": {"bsonType": ["string", "null"]},
               "deleted": {"bsonType": "bool"},
               "deletedAt": {"bsonType": ["date", "null"]},
               "createdAt": {"bsonType": "date"},
